@@ -3619,22 +3619,6 @@ function FlowNode({ node, depth = 0, onEdit, selected, onSelect, showStats }) {
       </div>
     );
   }
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      {depth > 0 && <div style={{ width: 2, height: 20, background: T.border }} />}
-      <div onClick={() => { onSelect(node.id); onEdit(node); }} style={{ background: isSelected ? nc.bg : T.card, border: `1.5px solid ${isSelected ? nc.border : T.border}`, borderRadius: 12, padding: "0.875rem 1rem", width: 300, cursor: "pointer", transition: "all 0.15s" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-          <div style={{ width: 26, height: 26, borderRadius: 7, background: nc.iconBg + "22", color: nc.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>{nc.icon}</div>
-          <span style={{ color: T.text, fontSize: 13, fontWeight: 600, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{node.label}</span>
-          <span style={{ background: CH_COLOR[node.channel] + "22", color: CH_COLOR[node.channel], fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, flexShrink: 0 }}>{CH_LABEL[node.channel]}</span>
-        </div>
-        <div style={{ color: T.muted, fontSize: 12, lineHeight: 1.55, fontStyle: "italic", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>"{node.content}"</div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 5 }}>
-          {node.delay > 0 && <span style={{ color: T.faint, fontSize: 11 }}>Day {node.delay}</span>}
-          <span style={{ background: T.accentBg, color: T.accent, fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3 }}>⏱ Tue–Thu 9–12am</span>
-        </div>
-      </div>
-    </div>
-  );
 
   if (node.type === "ab_split") {
     const s = node.stats;
