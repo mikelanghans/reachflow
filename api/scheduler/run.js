@@ -8,6 +8,7 @@
 //   Header: x-scheduler-secret = SCHEDULER_SECRET env var
 
 import { createClient } from '@supabase/supabase-js'
+import { sendDailyDigest } from '../notifications/reply.js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -56,6 +57,11 @@ export default async function handler(req, res) {
 
 async function processAgency(agency, results) {
   const now = new Date()
+
+  // Send daily digest at 8am
+  if (now.getHours() === 8) {
+    await maybeSendDailyDigest(agency, now)
+  }
 
   // 2. Check if we're within the send window for this agency
   if (!isWithinSendWindow(now, agency)) {
@@ -116,7 +122,7 @@ async function processAgency(agency, results) {
     for (const lead of (leads || [])) {
       if (remainingQuota <= 0) break
 
-      const flowNodes = flattenFlow(campaign.flow)
+      const flowNodes = await flattenFlowForLead(campaign.flow, lead)
       const currentNode = flowNodes[lead.current_step]
 
       if (!currentNode) {
@@ -244,24 +250,64 @@ function isWithinSendWindow(now, agency) {
   return hour >= startHour && hour < endHour
 }
 
-// Flatten flow nodes (handles nested condition branches)
-function flattenFlow(flow) {
+// Flatten flow nodes with behaviour-based branching
+// Checks actual lead status to decide which branch to follow at condition nodes
+async function flattenFlowForLead(flow, lead) {
   const nodes = []
+
   for (const node of (flow || [])) {
     if (node.type === 'end') continue
+
     if (node.type === 'condition') {
-      // Follow the "no reply" branch by default (most common path)
       nodes.push(node)
-      if (node.no) nodes.push(...flattenFlow(node.no))
+      // Check the actual condition against the lead's current status
+      const conditionMet = await evaluateCondition(node, lead)
+      const branch = conditionMet ? node.yes : node.no
+      if (branch) nodes.push(...await flattenFlowForLead(branch, lead))
+
     } else if (node.type === 'ab_split') {
-      // Use variant A by default
       nodes.push(node)
-      if (node.a) nodes.push(...flattenFlow(node.a))
+      // Determine which variant this lead is in (based on lead ID modulo)
+      const useA = parseInt(lead.id?.replace(/-/g, '').slice(0, 8), 16) % 2 === 0
+      const branch = useA ? node.a : node.b
+      if (branch) nodes.push(...await flattenFlowForLead(branch, lead))
+
     } else {
       nodes.push(node)
     }
   }
+
   return nodes.filter(n => n.type !== 'end')
+}
+
+async function evaluateCondition(node, lead) {
+  const trigger = node.trigger || 'replied'
+
+  if (trigger === 'replied') {
+    // Check if lead has replied since entering this step
+    const { count } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact' })
+      .eq('lead_id', lead.id)
+      .eq('direction', 'in')
+      .gte('sent_at', lead.step_entered_at || '2000-01-01')
+    return count > 0
+  }
+
+  if (trigger === 'connected') {
+    return lead.status === 'connected' || lead.status === 'replied' || lead.status === 'meeting'
+  }
+
+  if (trigger === 'no_reply') {
+    const { count } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact' })
+      .eq('lead_id', lead.id)
+      .eq('direction', 'in')
+    return count === 0
+  }
+
+  return false
 }
 
 // Simple personalisation — replace {{tokens}} with lead data
@@ -275,7 +321,7 @@ function personalise(template, lead) {
 }
 
 async function advanceLeadStep(lead, campaign, results, agencyId, reason = 'sent') {
-  const flowNodes = flattenFlow(campaign.flow)
+  const flowNodes = await flattenFlowForLead(campaign.flow, lead)
   const nextStep = (lead.current_step || 0) + 1
   const isComplete = nextStep >= flowNodes.length
 
@@ -321,6 +367,37 @@ async function sendViaUnipile({ accountId, lead, message, type }) {
   } catch (err) {
     console.error('Unipile send exception:', err)
     return false
+  }
+}
+
+async function maybeSendDailyDigest(agency, now) {
+  try {
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    const yday = yesterday.toISOString().split('T')[0]
+
+    const [{ count: sent }, { data: replies }, { count: meetings }] = await Promise.all([
+      supabase.from('messages').select('id', { count: 'exact' }).eq('agency_id', agency.id).eq('direction', 'out').gte('sent_at', yday + 'T00:00:00Z').lt('sent_at', yday + 'T23:59:59Z'),
+      supabase.from('messages').select('leads(name, company)').eq('agency_id', agency.id).eq('direction', 'in').gte('sent_at', yday + 'T00:00:00Z'),
+      supabase.from('leads').select('id', { count: 'exact' }).eq('agency_id', agency.id).eq('status', 'meeting').gte('updated_at', yday + 'T00:00:00Z'),
+    ])
+
+    if (!sent && !replies?.length) return // Nothing to report
+
+    const { data: user } = await supabase.from('users').select('email').eq('agency_id', agency.id).eq('role', 'admin').single()
+    if (!user?.email) return
+
+    await sendDailyDigest({
+      agencyEmail: user.email,
+      stats: {
+        sent:       sent || 0,
+        replies:    replies?.length || 0,
+        meetings:   meetings || 0,
+        replyNames: replies?.slice(0, 5).map(r => `${r.leads?.name} · ${r.leads?.company}`).filter(Boolean) || [],
+      },
+      appUrl: process.env.APP_URL || 'https://app.reachflow.io',
+    })
+  } catch (err) {
+    console.error('Daily digest error (non-fatal):', err)
   }
 }
 

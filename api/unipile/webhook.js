@@ -8,6 +8,7 @@
 //   https://your-domain.com/api/unipile/webhook
 
 import { createClient } from '@supabase/supabase-js'
+import { sendReplyNotification } from '../notifications/reply.js'
 
 // Use the service key here — this runs server-side and bypasses RLS intentionally
 const supabase = createClient(
@@ -150,6 +151,28 @@ async function handleMessageReceived(event) {
     message:   `${lead.name} replied`,
     meta:      { lead_id: lead.id, preview: content.slice(0, 80) },
   })
+
+  // Send email notification to agency
+  try {
+    const { data: user } = await supabase
+      .from('users')
+      .select('email')
+      .eq('agency_id', client.agency_id)
+      .eq('role', 'admin')
+      .single()
+
+    if (user?.email) {
+      await sendReplyNotification({
+        agencyEmail:    user.email,
+        leadName:       lead.name,
+        company:        lead.company || 'Unknown company',
+        messagePreview: content.slice(0, 200),
+        appUrl:         process.env.APP_URL || 'https://app.reachflow.io',
+      })
+    }
+  } catch (notifyErr) {
+    console.error('Notification error (non-fatal):', notifyErr)
+  }
 }
 
 async function handleInvitationAccepted(event) {
