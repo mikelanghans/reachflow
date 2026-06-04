@@ -4823,11 +4823,6 @@ export default function App() {
   const saveFlow = (campaignId, flow) => { setFlows(f => ({ ...f, [campaignId]: flow })); dbSaveFlow(campaignId, flow); };
   const toggleReviewModeWrapped = id => toggleReviewMode(id);
 
-  const saveFlow = (campaignId, newFlow) => {
-    setFlows(f => ({ ...f, [campaignId]: newFlow }));
-    const camp = campaigns.find(c => c.id === campaignId);
-    if (camp) logActivity("flow", `Sequence updated: ${camp.name}`, { campaignName: camp.name });
-  };
 
   useEffect(() => {
     const h = e => { if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setShowSearch(s => !s); } };
