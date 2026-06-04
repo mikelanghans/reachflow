@@ -3102,7 +3102,7 @@ function GlobalSearch({ onClose, onNavigate }) {
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
 function Settings({ brand = DEFAULT_BRAND, onBrandChange }) {
   const [settings, setSettings] = useLocalStorage("rf_settings", {
-    emailConnected: false, fromName: "Alex Johnson", replyTo: "", signature: "Best,\nAlex Johnson\nGrowth Agency", dailyLimit: 40
+    emailConnected: false, fromName: "", replyTo: "", signature: "", dailyLimit: 15
   });
   const set = patch => setSettings(s => ({ ...s, ...patch }));
   const [saved, setSaved] = useState(false);
@@ -3206,8 +3206,8 @@ function Settings({ brand = DEFAULT_BRAND, onBrandChange }) {
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 44, height: 44, background: "#0077b5", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "#fff", fontSize: 18, flexShrink: 0 }}>in</div>
           <div style={{ flex: 1 }}>
-            <div style={{ color: T.text, fontWeight: 600, fontSize: 14 }}>Alex Johnson</div>
-            <div style={{ color: T.muted, fontSize: 12 }}>alex.johnson@gmail.com · Connected via OAuth</div>
+            <div style={{ color: T.text, fontWeight: 600, fontSize: 14 }}>{settings.fromName || "Your account"}</div>
+            <div style={{ color: T.muted, fontSize: 12 }}>Connected via Unipile OAuth</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 7, height: 7, borderRadius: "50%", background: T.green }} />
