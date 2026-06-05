@@ -5036,7 +5036,7 @@ function ReviewQueue({ campaigns, onToggleReviewMode, logActivity, agencyId: age
           scheduledFor: q.scheduled_for ? new Date(q.scheduled_for).toLocaleString() : "Scheduled",
         })));
       });
-  }, [agencyId]);
+  }, [agencyIdProp]);
   const [selectedId, setSelectedId] = useState(queue[0]?.id || null);
   const [editMsg, setEditMsg]     = useState("");
   const [editing, setEditing]     = useState(false);
