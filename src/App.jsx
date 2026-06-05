@@ -2627,7 +2627,8 @@ function Inbox({ leads, setLeads, logActivity }) {
   // Classify a conversation using Claude
   const classifyIntent = async (conv) => {
     if (intents[conv.id]?.intent && intents[conv.id].intent !== "unknown") return; // already classified
-    const lastInbound = [...conv.messages].reverse().find(m => m.dir === "in");
+    const msgs = conv.messages.map(m => ({ ...m, dir: m.dir || (m.direction === "in" ? "in" : "out") }));
+    const lastInbound = [...msgs].reverse().find(m => m.dir === "in");
     if (!lastInbound) return;
     setIntents(i => ({ ...i, [conv.id]: { intent: "unknown", reason: "", nextStep: "", loading: true } }));
 
