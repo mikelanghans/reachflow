@@ -2636,7 +2636,7 @@ function Inbox({ leads, setLeads, logActivity, clients = [] }) {
     if (intents[conv.id]?.intent && intents[conv.id].intent !== "unknown") return; // already classified
     const msgs = (conv.messages || []).map(m => ({ ...m, dir: m.dir || (m.direction === "in" ? "in" : "out") }));
     const lastInbound = [...msgs].reverse().find(m => (m.dir === "in" || m.direction === "in"));
-    if (!lastInbound) return;
+    if (!lastInbound) { setIntents(i=>({...i,[conv.id]:{intent:'unknown',reason:'',nextStep:'',loading:false}})); return; }
     setIntents(i => ({ ...i, [conv.id]: { intent: "unknown", reason: "", nextStep: "", loading: true } }));
 
     const history = conv.messages.slice(-6).map(m => `${(m.dir === "out" || m.direction === "out") ? "You" : conv.name}: ${m.text || m.body || ''}`).join("\n");
