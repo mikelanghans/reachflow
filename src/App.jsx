@@ -3930,7 +3930,7 @@ Reply only with the message text, nothing else.`;
           <p style={{ color: T.muted, fontSize: 13, margin: 0 }}>Spot engagement signals from your leads before reaching out</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          {[["linkedin", "in", "#0077b5"], ["twitter", "𝕏", "#1a1a2e"]].map(([id, icon, col]) => (
+          {[["linkedin", "in", "#0077b5"]].map(([id, icon, col]) => (
             <button key={id} onClick={() => { setPlatform(id); setComposed(null); }}
               style={{ background: platform === id ? col : T.card, color: platform === id ? "#fff" : T.muted, border: `1px solid ${platform === id ? col : T.border}`, borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
               <span>{icon}</span>{id === "linkedin" ? "LinkedIn" : "Twitter/X"}
@@ -4737,14 +4737,6 @@ const SEO_PLATFORMS = [
       { key: "preview",      label: "Preview text alignment", weight: 10, tip: "First sentence of the email should complement the subject line, not repeat it." },
     ]
   },
-  {
-    id: "twitter",
-    label: "Twitter / X",
-    icon: "𝕏",
-    iconBg: "#1a1a2e",
-    desc: "Optimise for engagement and retweet potential",
-    criteria: [
-      { key: "length",    label: "Character count",    weight: 20, tip: "Under 240 chars leaves room for retweets with comment. Under 120 is ideal for standalone posts." },
       { key: "hook",      label: "Opening hook",       weight: 30, tip: "First 5 words have to earn the read. Statement, question, or number." },
       { key: "hashtags",  label: "Hashtag usage",      weight: 15, tip: "1–2 hashtags maximum. More than 2 tanks engagement algorithmically." },
       { key: "cta",       label: "Engagement hook",    weight: 20, tip: "Ask a question, propose a debate, or share a hot take. Something that demands a reply." },
