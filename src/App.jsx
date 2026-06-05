@@ -5021,7 +5021,7 @@ const DEFAULT_QUEUE = [];
 function ReviewQueue({ campaigns, onToggleReviewMode, logActivity }) {
   const [queue, setQueue] = useState([]);
   useEffect(() => {
-    supabase.from("review_queue").select("*, leads(name, title, company), campaigns(name, client_id)").eq("agency_id", agencyId || "").order("created_at", { ascending: false })
+    supabase.from("review_queue").select("*, leads(name, title, company), campaigns(name, client_id)").eq("agency_id", agencyIdProp || "").order("created_at", { ascending: false })
       .then(({ data }) => {
         if (data) setQueue(data.map(q => ({
           id: q.id, campaignId: q.campaign_id,
