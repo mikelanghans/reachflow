@@ -2583,7 +2583,14 @@ function IntentBadge({ intent, small = false }) {
 }
 
 function Inbox({ leads, setLeads, logActivity }) {
-  const conversations = (leads || []).filter(l => l.messages && l.messages.length > 0);
+  const getClientName = (clientId) => {
+    if (!clientId) return "";
+    const found = (clients || []).find(c => c.id === clientId);
+    return found ? found.name : clientId;
+  };
+  const conversations = (leads || [])
+    .filter(l => l.messages && l.messages.length > 0)
+    .map(l => ({ ...l, client: getClientName(l.client) }));
 
   const [selectedId, setSelectedId]     = useState(null);
   const [filter, setFilter]             = useState("all");
@@ -2607,7 +2614,7 @@ function Inbox({ leads, setLeads, logActivity }) {
 
   // Auto-detect opt-out in inbound messages and add to suppression list
   const checkForOptOut = (conv) => {
-    const lastIn = [...conv.messages].reverse().find(m => m.dir === "in");
+    const lastIn = [...conv.messages].reverse().find(m => (m.dir === "in" || m.direction === "in"));
     if (!lastIn || !isOptOut(lastIn.text)) return false;
     const email = `${conv.name.toLowerCase().replace(/\s+/g, ".")}@${conv.company.toLowerCase()}.com`;
     if (!suppressions[email]) {
@@ -2628,11 +2635,11 @@ function Inbox({ leads, setLeads, logActivity }) {
   const classifyIntent = async (conv) => {
     if (intents[conv.id]?.intent && intents[conv.id].intent !== "unknown") return; // already classified
     const msgs = conv.messages.map(m => ({ ...m, dir: m.dir || (m.direction === "in" ? "in" : "out") }));
-    const lastInbound = [...msgs].reverse().find(m => m.dir === "in");
+    const lastInbound = [...msgs].reverse().find(m => (m.dir === "in" || m.direction === "in"));
     if (!lastInbound) return;
     setIntents(i => ({ ...i, [conv.id]: { intent: "unknown", reason: "", nextStep: "", loading: true } }));
 
-    const history = conv.messages.slice(-6).map(m => `${m.dir === "out" ? "You" : conv.name}: ${m.text}`).join("\n");
+    const history = conv.messages.slice(-6).map(m => `${(m.dir === "out" || m.direction === "out") ? "You" : conv.name}: ${m.text || m.body || ''}`).join("\n");
     const prompt = `Classify this LinkedIn reply for a salesperson. Read the full conversation then classify the LAST inbound message.
 
 Conversation:
@@ -2664,7 +2671,7 @@ Respond with JSON only:
   const suggestReply = async (overridePrompt = null) => {
     if (!selected) return;
     setSuggesting(true);
-    const history = selected.messages.map(m => `${m.dir === "out" ? "You" : selected.name}: ${m.text}`).join("\n");
+    const history = selected.messages.map(m => `${(m.dir === "out" || m.direction === "out") ? "You" : selected.name}: ${m.text || m.body || ''}`).join("\n");
     const intent = intents[selected.id];
     const contextHint = overridePrompt || (intent?.intent === "objection"
       ? `Address their objection: "${intent.reason}". Don't be defensive, acknowledge it and reframe.`
@@ -3188,7 +3195,7 @@ Keep replies concise (2-4 sentences). Be specific and practical.`;
               <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
                 <div style={{ maxWidth: "78%", display: "flex", gap: 8, alignItems: "flex-end", flexDirection: m.role === "user" ? "row-reverse" : "row" }}>
                   {m.role === "assistant" && <div style={{ width: 26, height: 26, borderRadius: "50%", background: T.accentBg, border: `1px solid ${T.accent}44`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: T.accent }}>✦</div>}
-                  <div style={{ background: m.role === "user" ? T.accentBg : T.surface, border: `1px solid ${m.role === "user" ? T.accent + "44" : T.border}`, borderRadius: m.role === "user" ? "12px 12px 4px 12px" : "12px 12px 12px 4px", padding: "9px 13px", color: T.text, fontSize: 13, lineHeight: 1.65 }}>{m.text}</div>
+                  <div style={{ background: m.role === "user" ? T.accentBg : T.surface, border: `1px solid ${m.role === "user" ? T.accent + "44" : T.border}`, borderRadius: m.role === "user" ? "12px 12px 4px 12px" : "12px 12px 12px 4px", padding: "9px 13px", color: T.text, fontSize: 13, lineHeight: 1.65 }}>{m.text || m.body || ''}</div>
                 </div>
               </div>
             ))}
