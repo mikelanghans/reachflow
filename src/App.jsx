@@ -5018,7 +5018,7 @@ Write only the improved version. Keep the same core message but fix every issue 
 // ─── REVIEW QUEUE ─────────────────────────────────────────────────────────────
 const DEFAULT_QUEUE = [];
 
-function ReviewQueue({ campaigns, onToggleReviewMode, logActivity }) {
+function ReviewQueue({ campaigns, onToggleReviewMode, logActivity, agencyId: agencyIdProp }) {
   const [queue, setQueue] = useState([]);
   useEffect(() => {
     supabase.from("review_queue").select("*, leads(name, title, company), campaigns(name, client_id)").eq("agency_id", agencyIdProp || "").order("created_at", { ascending: false })
