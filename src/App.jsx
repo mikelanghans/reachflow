@@ -565,6 +565,9 @@ function WelcomeOnboarding({ onDismiss }) {
         {step > 0 && (
           <button onClick={() => setStep(s => s - 1)} style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", fontSize: 12, marginTop: 12 }}>← Back</button>
         )}
+        <button onClick={onDismiss} style={{ background: "transparent", border: "none", color: T.faint, cursor: "pointer", fontSize: 12, marginTop: 8, display: "block", margin: "8px auto 0" }}>
+          Don't show again
+        </button>
       </div>
     </div>
   );
