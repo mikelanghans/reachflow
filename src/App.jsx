@@ -4737,6 +4737,13 @@ const SEO_PLATFORMS = [
       { key: "preview",      label: "Preview text alignment", weight: 10, tip: "First sentence of the email should complement the subject line, not repeat it." },
     ]
   },
+  {
+    id: "twitter",
+    label: "Twitter / X",
+    icon: "𝕏",
+    iconBg: "#000000",
+    desc: "Optimise for engagement and virality on Twitter/X",
+    criteria: [
       { key: "hook",      label: "Opening hook",       weight: 30, tip: "First 5 words have to earn the read. Statement, question, or number." },
       { key: "hashtags",  label: "Hashtag usage",      weight: 15, tip: "1–2 hashtags maximum. More than 2 tanks engagement algorithmically." },
       { key: "cta",       label: "Engagement hook",    weight: 20, tip: "Ask a question, propose a debate, or share a hot take. Something that demands a reply." },
