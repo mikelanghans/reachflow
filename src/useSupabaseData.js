@@ -59,7 +59,7 @@ export function useSupabaseData(agencyId) {
       })))
 
       setCampaignsState((campaignData || []).map(c => ({
-        id: c.id, name: c.name, client: c.client_id, status: c.status,
+        id: c.id, name: c.name, client: clientMap[c.client_id] || c.client_id, client_id: c.client_id, status: c.status,
         channel: c.channel, flow: c.flow || [], reviewMode: c.review_mode,
         leads: c.leads_count, sent: c.sent_count,
         replies: c.replies_count, meetings: c.meetings_count,
