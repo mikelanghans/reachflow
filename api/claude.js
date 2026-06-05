@@ -1,8 +1,4 @@
-// api/claude.js
-// Proxies requests to the Anthropic API so the API key never reaches the browser.
-// Frontend calls: POST /api/claude with the same body it would send to Anthropic.
-
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -14,10 +10,10 @@ export default async function handler(req, res) {
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method:  'POST',
+      method: 'POST',
       headers: {
-        'Content-Type':      'application/json',
-        'x-api-key':         apiKey,
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(req.body),
