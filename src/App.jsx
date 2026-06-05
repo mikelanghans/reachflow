@@ -5384,7 +5384,7 @@ export default function App() {
         {view === "inbox"      && <Inbox leads={leads} setLeads={setLeads} logActivity={logActivity} />}
         {view === "pipeline"   && <div style={{ padding: "2rem 2.25rem" }}><Pipeline leads={leads} setLeads={setLeads} logActivity={logActivity} /></div>}
         {view === "campaigns"  && <Campaigns onNew={() => setShowNewCampaign(true)} onTemplates={() => setShowTemplates(true)} onEditFlow={c => setFlowCampaign(c)} campaigns={campaigns} clients={clients} onDeleteCampaign={deleteCampaign} onToggleCampaign={toggleCampaign} onToggleReviewMode={toggleReviewModeWrapped} />}
-        {view === "queue"      && <ReviewQueue campaigns={campaigns} onToggleReviewMode={toggleReviewModeWrapped} logActivity={logActivity} />}
+        {view === "queue" && <ReviewQueue campaigns={campaigns} onToggleReviewMode={toggleReviewModeWrapped} logActivity={logActivity} agencyId={agencyId} />}
 
         {/* 4. Skeleton loaders in Leads */}
         {view === "leads"      && <Leads leads={leads} setLeads={setLeads} logActivity={logActivity} loading={db.loading} />}
