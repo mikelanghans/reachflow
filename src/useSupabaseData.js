@@ -78,7 +78,7 @@ export function useSupabaseData(agencyId) {
       setLeadsState((leadData || []).map(l => ({
         id: l.id, name: l.name, title: l.title, company: l.company,
         initials: l.initials, color: l.color || '#7d8590',
-        clientColor: '#58a6ff', campaign: l.campaign_id, client: l.client_id,
+        clientColor: '#58a6ff', campaign: l.campaign_id, client_id: l.client_id, client: l.client_id,
         pipelineStage: l.pipeline_stage, days: l.days_in_stage,
         status: l.status, unread: l.unread, last: l.last_activity_at ? 'recently' : 'new',
         messages: messagesByLead[l.id] || [],
