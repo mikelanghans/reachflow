@@ -5021,7 +5021,7 @@ const DEFAULT_QUEUE = [];
 function ReviewQueue({ campaigns, onToggleReviewMode, logActivity, agencyId: agencyIdProp }) {
   const [queue, setQueue] = useState([]);
   useEffect(() => {
-    supabase.from("review_queue").select("*, leads(name, title, company), campaigns(name, client_id)").eq("agency_id", agencyIdProp || "").order("created_at", { ascending: false })
+    supabase.from("review_queue").select("*, leads(name, title, company), campaigns(name, client_id)").eq("agency_id", agencyIdProp).order("created_at", { ascending: false })
       .then(({ data }) => {
         if (data) setQueue(data.map(q => ({
           id: q.id, campaignId: q.campaign_id,
@@ -5036,7 +5036,7 @@ function ReviewQueue({ campaigns, onToggleReviewMode, logActivity, agencyId: age
           scheduledFor: q.scheduled_for ? new Date(q.scheduled_for).toLocaleString() : "Scheduled",
         })));
       });
-  }, [agencyIdProp]);
+  }, [agencyIdProp]); // only runs when agencyIdProp is truthy (see guard above)
   const [selectedId, setSelectedId] = useState(queue[0]?.id || null);
   const [editMsg, setEditMsg]     = useState("");
   const [editing, setEditing]     = useState(false);
