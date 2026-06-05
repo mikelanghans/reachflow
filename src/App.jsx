@@ -5323,7 +5323,7 @@ export default function App() {
     <div style={{ display: "flex", minHeight: "100vh", background: T.bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
 
       {/* ── Global overlays ── */}
-      {showTemplates   && <TemplatesModal   onClose={() => setShowTemplates(false)} onUse={() => { setShowTemplates(false); setView("campaigns"); }} />}
+      {showTemplates   && <TemplatesModal   onClose={() => setShowTemplates(false)} onUse={(t) => { setShowTemplates(false); setShowNewCampaign(true); }} />}
       {showNewCampaign && <NewCampaignModal onClose={() => setShowNewCampaign(false)} clients={clients} onLaunchFlow={c => { addCampaign(c); setShowNewCampaign(false); setFlowCampaign(c); }} />}
       {showSearch      && <GlobalSearch     onClose={() => setShowSearch(false)} onNavigate={v => setView(v)} />}
       {editingClient   && <EditClientModal  client={editingClient} onClose={() => setEditingClient(null)} onSave={c => { updateClient(c); setEditingClient(null); logActivity("client", `ICP updated for ${c.name}`); pushToast(`${c.name} updated`, "success"); }} />}
