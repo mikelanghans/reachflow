@@ -5187,7 +5187,7 @@ function ReviewQueue({ campaigns, onToggleReviewMode, logActivity, agencyId: age
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <span style={{ background: selected.clientColor + "22", color: selected.clientColor, fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 4 }}>{getClientName(selected.client) || selected.client}</span>
+                      <span style={{ background: selected.clientColor + "22", color: selected.clientColor, fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 4 }}>{selected.client}</span>
                       <span style={{ background: T.faint + "44", color: T.muted, fontSize: 11, padding: "3px 8px", borderRadius: 4 }}>{selected.campaign?.length > 20 ? 'Campaign' : selected.campaign}</span>
                       <span style={{ background: selected.channel === "linkedin" ? T.blue + "22" : T.purple + "22", color: selected.channel === "linkedin" ? T.blue : T.purple, fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 4 }}>{selected.channel === "linkedin" ? "LinkedIn" : "Email"}</span>
                       <span style={{ background: T.faint + "44", color: T.muted, fontSize: 11, padding: "3px 8px", borderRadius: 4 }}>📅 {selected.scheduledFor}</span>
