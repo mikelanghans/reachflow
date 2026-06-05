@@ -2878,9 +2878,9 @@ Respond with JSON only:
           {/* Messages */}
           <div style={{ flex: 1, overflowY: "auto", padding: "1.25rem 1.5rem", display: "flex", flexDirection: "column", gap: 12 }}>
             {selected.messages.map(msg => (
-              <div key={msg.id} style={{ display: "flex", justifyContent: msg.dir === "out" ? "flex-end" : "flex-start" }}>
-                <div style={{ maxWidth: "72%", display: "flex", flexDirection: "column", alignItems: msg.dir === "out" ? "flex-end" : "flex-start", gap: 4 }}>
-                  <div style={{ background: msg.dir === "out" ? T.accentBg : T.card, border: `1px solid ${msg.dir === "out" ? T.accent + "44" : T.border}`, borderRadius: msg.dir === "out" ? "12px 12px 4px 12px" : "12px 12px 12px 4px", padding: "10px 14px", color: T.text, fontSize: 13, lineHeight: 1.6 }}>{msg.text}</div>
+              <div key={msg.id} style={{ display: "flex", justifyContent: (msg.dir || msg.direction) === "out" ? "flex-end" : "flex-start" }}>
+                <div style={{ maxWidth: "72%", display: "flex", flexDirection: "column", alignItems: (msg.dir || msg.direction) === "out" ? "flex-end" : "flex-start", gap: 4 }}>
+                  <div style={{ background: (msg.dir || msg.direction) === "out" ? T.accentBg : T.card, border: `1px solid ${(msg.dir || msg.direction) === "out" ? T.accent + "44" : T.border}`, borderRadius: (msg.dir || msg.direction) === "out" ? "12px 12px 4px 12px" : "12px 12px 12px 4px", padding: "10px 14px", color: T.text, fontSize: 13, lineHeight: 1.6 }}>{msg.text || msg.body || ""}</div>
                   <div style={{ color: T.muted, fontSize: 11 }}>{msg.time}</div>
                 </div>
               </div>
