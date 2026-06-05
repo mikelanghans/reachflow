@@ -85,7 +85,7 @@ function OnboardingWizard({ onComplete, onBack, brand = DEFAULT_BRAND }) {
       const res = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       const text = data.content?.find(b => b.type === "text")?.text || "";
@@ -926,7 +926,7 @@ function EditClientModal({ client, onClose, onSave }) {
     try {
       const res = await fetch("/api/claude", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       const text = data.content?.find(b => b.type === "text")?.text || "";
@@ -1298,7 +1298,7 @@ Write only the diagnosis text, nothing else.`;
     try {
       const res = await fetch("/api/claude", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       setDiagnosis(data.content?.find(b => b.type === "text")?.text || "");
@@ -2657,7 +2657,7 @@ Respond with JSON only:
     try {
       const res = await fetch("/api/claude", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       const text = data.content?.find(b => b.type === "text")?.text || "{}";
@@ -2684,7 +2684,7 @@ Respond with JSON only:
     try {
       const res = await fetch("/api/claude", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       setReply(data.content?.find(b => b.type === "text")?.text || "");
@@ -2969,7 +2969,7 @@ Respond JSON only:
     try {
       const res = await fetch("/api/claude", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       const text = data.content?.find(b => b.type === "text")?.text || "{}";
@@ -3010,7 +3010,7 @@ Keep replies concise (2-4 sentences). Be specific and practical.`;
     try {
       const res = await fetch("/api/claude", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 1000, system: sys,
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, system: sys,
           messages: newMsgs.map(m => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.text })) }),
       });
       const data = await res.json();
@@ -3912,7 +3912,7 @@ Reply only with the message text, nothing else.`;
     try {
       const res = await fetch("/api/claude", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       setDraftMsg(data.content?.find(b => b.type === "text")?.text || "");
@@ -4844,7 +4844,7 @@ Write only the improved version. Keep the same core message but fix every issue 
     try {
       const res = await fetch("/api/claude", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       setRewrite(data.content?.find(b => b.type === "text")?.text || "");
