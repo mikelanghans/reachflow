@@ -2777,7 +2777,7 @@ Respond with JSON only:
                     </div>
                     <div style={{ color: T.muted, fontSize: 11, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{conv.title} · {conv.company}</div>
                     <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
-                      <span style={{ background: conv.clientColor + "22", color: conv.clientColor, fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 3 }}>{getClientName(conv.client_id || conv.client) || conv.client}</span>
+                      <span style={{ background: conv.clientColor + "22", color: conv.clientColor, fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 3 }}>{conv.client}</span>
                       {isSuppressed(conv)
                         ? <span style={{ background: T.red + "22", color: T.red, fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4 }}>🚫 Opted out</span>
                         : hasBadge ? <IntentBadge intent={ci.intent} small /> : <Badge status={conv.status} />}
