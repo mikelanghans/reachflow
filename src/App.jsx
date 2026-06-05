@@ -2977,7 +2977,7 @@ Respond JSON only:
       set({ plan: parsed, phase: "active", tab: "plan",
             messages: [{ role: "assistant", text: parsed.greeting + " Your plan is ready — check the Plan tab. I'm here whenever you have questions." }] });
     } catch {
-      set({ plan: { greeting: "Let\'s get you started!", planTitle: "Your Launch Plan", steps: [
+      set({ plan: { greeting: "Let's get you started!", planTitle: "Your Launch Plan", steps: [
         { id: 1, title: "Connect LinkedIn", detail: "Add a client and complete OAuth. Takes 2 minutes.", feature: "Dashboard", effort: "2 min" },
         { id: 2, title: "Define your ICP", detail: "Fill in job title, industry and company size in the onboarding wizard.", feature: "Onboarding", effort: "3 min" },
         { id: 3, title: "Import leads", detail: "Paste a LinkedIn search URL in Lead Lists. Aim for 50–100 leads.", feature: "Lead Lists", effort: "10 min" },
@@ -3033,12 +3033,12 @@ Keep replies concise (2-4 sentences). Be specific and practical.`;
           <span style={{ color: T.accent }}>✦</span>
           <span style={{ color: T.accent, fontSize: 12, fontWeight: 700 }}>AI Coach</span>
         </div>
-        <h1 style={{ color: T.text, fontSize: 22, fontWeight: 700, margin: "0 0 8px" }}>Let\'s build your plan</h1>
-        <p style={{ color: T.muted, fontSize: 14, margin: 0, lineHeight: 1.6 }}>Answer three quick questions and I\'ll create a personalised action plan — and stay on hand to guide you through every step. Your progress is saved automatically.</p>
+        <h1 style={{ color: T.text, fontSize: 22, fontWeight: 700, margin: "0 0 8px" }}>Let's build your plan</h1>
+        <p style={{ color: T.muted, fontSize: 14, margin: 0, lineHeight: 1.6 }}>Answer three quick questions and I'll create a personalised action plan — and stay on hand to guide you through every step. Your progress is saved automatically.</p>
       </div>
 
       <div style={{ marginBottom: "1.5rem" }}>
-        <div style={{ color: T.text, fontSize: 14, fontWeight: 600, marginBottom: "0.75rem" }}>What\'s your main goal?</div>
+        <div style={{ color: T.text, fontSize: 14, fontWeight: 600, marginBottom: "0.75rem" }}>What's your main goal?</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {GOAL_OPTIONS.map(g => (
             <div key={g.id} onClick={() => set({ goal: g.id })} style={{ background: goal === g.id ? T.accentBg : T.card, border: `1.5px solid ${goal === g.id ? T.accent : T.border}`, borderRadius: 10, padding: "0.875rem", cursor: "pointer", transition: "all 0.15s" }}>
