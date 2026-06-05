@@ -5312,6 +5312,16 @@ export default function App() {
   // Not logged in
   if (!session) return <AuthScreen />;
 
+  if (flowCampaign) return (
+    <div style={{ background: T.bg, minHeight: "100vh", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+      <FlowBuilder
+        campaign={flowCampaign}
+        onClose={() => setFlowCampaign(null)}
+        savedFlow={flows[flowCampaign?.id]}
+        onSave={(flow) => { saveFlow(flowCampaign.id, flow); setFlowCampaign(null); }}
+      />
+    </div>
+  );
 
   if (onboarding) return (
     <div style={{ background: T.bg, minHeight: "100vh", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
