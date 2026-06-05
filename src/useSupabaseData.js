@@ -75,6 +75,9 @@ export function useSupabaseData(agencyId) {
         })
       }
 
+      const clientMap = {}
+      for (const c of (clientData || [])) { clientMap[c.id] = c.name }
+
       setLeadsState((leadData || []).map(l => ({
         id: l.id, name: l.name, title: l.title, company: l.company,
         initials: l.initials, color: l.color || '#7d8590',
