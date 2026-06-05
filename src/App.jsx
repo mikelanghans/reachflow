@@ -5019,7 +5019,24 @@ Write only the improved version. Keep the same core message but fix every issue 
 const DEFAULT_QUEUE = [];
 
 function ReviewQueue({ campaigns, onToggleReviewMode, logActivity }) {
-  const [queue, setQueue]         = useLocalStorage("rf_review_queue", DEFAULT_QUEUE);
+  const [queue, setQueue] = useState([]);
+  useEffect(() => {
+    supabase.from("review_queue").select("*, leads(name, title, company), campaigns(name, client_id)").eq("agency_id", agencyId || "").order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setQueue(data.map(q => ({
+          id: q.id, campaignId: q.campaign_id,
+          campaign: q.campaigns?.name || "Campaign",
+          client: q.campaigns?.client_id || "",
+          clientColor: "#58a6ff",
+          leadName: q.leads?.name || "Unknown",
+          leadTitle: q.leads?.title || "",
+          leadCompany: q.leads?.company || "",
+          type: q.message_type, channel: q.channel,
+          message: q.message_body, status: q.status,
+          scheduledFor: q.scheduled_for ? new Date(q.scheduled_for).toLocaleString() : "Scheduled",
+        })));
+      });
+  }, [agencyId]);
   const [selectedId, setSelectedId] = useState(queue[0]?.id || null);
   const [editMsg, setEditMsg]     = useState("");
   const [editing, setEditing]     = useState(false);
