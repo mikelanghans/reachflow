@@ -1032,15 +1032,7 @@ const ACTIVITY_ICONS = {
 };
 
 function ActivityFeed({ activity, setView }) {
-  const DEMO_ACTIVITY = [
-    { id: -1, type: "meeting",  message: "Meeting booked with Marcus Williams · Notion",    time: new Date(Date.now() - 1000*60*18).toISOString() },
-    { id: -2, type: "reply",    message: "Reply sent to Sarah Chen",                        time: new Date(Date.now() - 1000*60*47).toISOString() },
-    { id: -3, type: "pipeline", message: "Raj Mehta moved to engaged",                     time: new Date(Date.now() - 1000*60*60*2).toISOString() },
-    { id: -4, type: "import",   message: "8 leads imported: VP Product — SaaS — US",       time: new Date(Date.now() - 1000*60*60*5).toISOString() },
-    { id: -5, type: "campaign", message: "Campaign created: FinTech Decision Makers",       time: new Date(Date.now() - 1000*60*60*8).toISOString() },
-  ];
-
-  const entries = activity.length > 0 ? activity : DEMO_ACTIVITY;
+  const entries = activity;
 
   const timeAgo = (iso) => {
     const diff = Date.now() - new Date(iso).getTime();
