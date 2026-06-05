@@ -2582,7 +2582,7 @@ function IntentBadge({ intent, small = false }) {
   );
 }
 
-function Inbox({ leads, setLeads, logActivity }) {
+function Inbox({ leads, setLeads, logActivity, clients = [] }) {
   const getClientName = (clientId) => {
     if (!clientId) return "";
     const found = (clients || []).find(c => c.id === clientId);
