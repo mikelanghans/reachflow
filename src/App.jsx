@@ -2634,7 +2634,7 @@ function Inbox({ leads, setLeads, logActivity, clients = [] }) {
   // Classify a conversation using Claude
   const classifyIntent = async (conv) => {
     if (intents[conv.id]?.intent && intents[conv.id].intent !== "unknown") return; // already classified
-    const msgs = conv.messages.map(m => ({ ...m, dir: m.dir || (m.direction === "in" ? "in" : "out") }));
+    const msgs = (conv.messages || []).map(m => ({ ...m, dir: m.dir || (m.direction === "in" ? "in" : "out") }));
     const lastInbound = [...msgs].reverse().find(m => (m.dir === "in" || m.direction === "in"));
     if (!lastInbound) return;
     setIntents(i => ({ ...i, [conv.id]: { intent: "unknown", reason: "", nextStep: "", loading: true } }));
@@ -2799,7 +2799,7 @@ Respond with JSON only:
               <div style={{ width: 40, height: 40, borderRadius: "50%", background: selected.color + "22", color: selected.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800 }}>{selected.initials}</div>
               <div>
                 <div style={{ color: T.text, fontWeight: 700, fontSize: 15 }}>{selected.name}</div>
-                <div style={{ color: T.muted, fontSize: 12 }}>{selected.title} at {selected.company} · <span style={{ color: selected.clientColor }}>{selected.client}</span></div>
+                <div style={{ color: T.muted, fontSize: 12 }}>{selected.title} at {selected.company} · <span style={{ color: selected.clientColor }}>{getClientName(selected.client) || selected.client}</span></div>
               </div>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -2858,7 +2858,7 @@ Respond with JSON only:
           {/* Campaign tag */}
           <div style={{ padding: "0.5rem 1.5rem", borderBottom: `1px solid ${T.faint}`, display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ color: T.muted, fontSize: 11 }}>Campaign:</span>
-            <span style={{ color: T.text, fontSize: 11, background: T.faint, padding: "2px 8px", borderRadius: 4 }}>{selected.campaign}</span>
+            <span style={{ color: T.text, fontSize: 11, background: T.faint, padding: "2px 8px", borderRadius: 4 }}>{selected.campaign?.length > 20 ? 'Campaign' : selected.campaign}</span>
             <span style={{ color: T.muted, fontSize: 11, marginLeft: "auto" }}>{selected.messages.length} messages</span>
           </div>
 
@@ -5170,8 +5170,8 @@ function ReviewQueue({ campaigns, onToggleReviewMode, logActivity }) {
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <span style={{ background: selected.clientColor + "22", color: selected.clientColor, fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 4 }}>{selected.client}</span>
-                      <span style={{ background: T.faint + "44", color: T.muted, fontSize: 11, padding: "3px 8px", borderRadius: 4 }}>{selected.campaign}</span>
+                      <span style={{ background: selected.clientColor + "22", color: selected.clientColor, fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 4 }}>{getClientName(selected.client) || selected.client}</span>
+                      <span style={{ background: T.faint + "44", color: T.muted, fontSize: 11, padding: "3px 8px", borderRadius: 4 }}>{selected.campaign?.length > 20 ? 'Campaign' : selected.campaign}</span>
                       <span style={{ background: selected.channel === "linkedin" ? T.blue + "22" : T.purple + "22", color: selected.channel === "linkedin" ? T.blue : T.purple, fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 4 }}>{selected.channel === "linkedin" ? "LinkedIn" : "Email"}</span>
                       <span style={{ background: T.faint + "44", color: T.muted, fontSize: 11, padding: "3px 8px", borderRadius: 4 }}>📅 {selected.scheduledFor}</span>
                     </div>
