@@ -58,6 +58,9 @@ export function useSupabaseData(agencyId) {
         linkedinConnected: c.linkedin_connected,
       })))
 
+      const clientMap = {}
+      for (const c of (clientData || [])) { clientMap[c.id] = c.name }
+
       setCampaignsState((campaignData || []).map(c => ({
         id: c.id, name: c.name, client: clientMap[c.client_id] || c.client_id, client_id: c.client_id, status: c.status,
         channel: c.channel, flow: c.flow || [], reviewMode: c.review_mode,
@@ -74,9 +77,6 @@ export function useSupabaseData(agencyId) {
           time: new Date(m.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         })
       }
-
-      const clientMap = {}
-      for (const c of (clientData || [])) { clientMap[c.id] = c.name }
 
       setLeadsState((leadData || []).map(l => ({
         id: l.id, name: l.name, title: l.title, company: l.company,
