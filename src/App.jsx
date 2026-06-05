@@ -5026,7 +5026,7 @@ function ReviewQueue({ campaigns, onToggleReviewMode, logActivity, agencyId: age
         if (data) setQueue(data.map(q => ({
           id: q.id, campaignId: q.campaign_id,
           campaign: q.campaigns?.name || "Campaign",
-          client: campaigns.find(c => c.id === q.campaign_id)?.client || q.campaigns?.client_id || "",
+          client: (campaigns.find(c => c.id === q.campaign_id)?.client) || "",
           clientColor: "#58a6ff",
           leadName: q.leads?.name || "Unknown",
           leadTitle: q.leads?.title || "",
