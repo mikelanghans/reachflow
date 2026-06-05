@@ -2733,7 +2733,7 @@ Respond with JSON only:
   const actions = selectedIntent ? (INTENT_ACTIONS[selectedIntent.intent] || []) : [];
 
   // Auto-classify selected conversation on mount/change
-  useEffect(() => { if (selected) classifyIntent(selected); }, [selected?.id]);
+  useEffect(() => { if (selected) setTimeout(() => classifyIntent(selected), 500); }, [selected?.id, selected?.messages?.length]);
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
