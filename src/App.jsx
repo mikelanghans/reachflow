@@ -14871,7 +14871,9 @@ function FlowBuilder({
   onSave,
   voiceProfile = DEFAULT_VOICE_PROFILE,
 }) {
-  const [flow, setFlow] = useState(() => savedFlow || []);
+  const [flow, setFlow] = useState(() =>
+    Array.isArray(savedFlow) ? savedFlow : [],
+  );
   const [editNode, setEditNode] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [saved, setSaved] = useState(false);
@@ -15193,7 +15195,11 @@ Every branch (yes/no, a/b) must end with an "end" node. ids must be unique integ
     boxSizing: "border-box",
   };
 
-  const flowStr = JSON.stringify(flow);
+  // Guard against corrupted/non-array flow data (e.g. from a past save bug)
+  // crashing the whole Flow Builder — fall back to an empty flow instead.
+  const safeFlow = Array.isArray(flow) ? flow : [];
+
+  const flowStr = JSON.stringify(safeFlow);
   const msgCount = (flowStr.match(/"type":"message"/g) || []).length;
   const condCount = (flowStr.match(/"type":"condition"/g) || []).length;
   const abCount = (flowStr.match(/"type":"ab_split"/g) || []).length;
@@ -15201,7 +15207,7 @@ Every branch (yes/no, a/b) must end with an "end" node. ids must be unique integ
   // Extract A/B nodes for results tab
   const abNodes = [];
   const extractAB = (nodes) =>
-    nodes.forEach((n) => {
+    (nodes || []).forEach((n) => {
       if (n.type === "ab_split") abNodes.push(n);
       if (n.yes) extractAB(n.yes);
       if (n.no) extractAB(n.no);
@@ -15210,7 +15216,7 @@ Every branch (yes/no, a/b) must end with an "end" node. ids must be unique integ
         extractAB(n.b);
       }
     });
-  extractAB(flow);
+  extractAB(safeFlow);
 
   return (
     <div
