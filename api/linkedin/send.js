@@ -72,14 +72,14 @@ export default async function handler(req, res) {
     let endpoint, body
 
     if (type === 'connection_request') {
-      endpoint = 'https://api.unipile.com:13465/api/v1/linkedin/invitations'
+      endpoint = 'https://api49.unipile.com:17927/api/v1/linkedin/invitations'
       body = {
         account_id:           client.unipile_account_id,
         linkedin_member_urn:  lead?.linkedin_urn,
         message,
       }
     } else {
-      endpoint = 'https://api.unipile.com:13465/api/v1/linkedin/messages'
+      endpoint = 'https://api49.unipile.com:17927/api/v1/linkedin/messages'
       body = {
         account_id:         client.unipile_account_id,
         recipient_urn:      lead?.linkedin_urn,

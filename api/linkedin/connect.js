@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   const { client_id } = req.body
 
   try {
-    const response = await fetch('https://api18.unipile.com:14849/api/v1/hosted/accounts/link', {
+    const response = await fetch('https://api49.unipile.com:17927/api/v1/hosted/accounts/link', {
       method: 'POST',
       headers: {
         'X-API-KEY':    apiKey,
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         type: 'create',
         providers_filters: { include: ['LINKEDIN'] },
-        api_url: 'https://api18.unipile.com:14849',
+        api_url: 'https://api49.unipile.com:17927',
         expiresOn: new Date(Date.now() + 3600000).toISOString(),
         success_redirect_url: `${process.env.APP_URL}/onboarding/connected?client_id=${client_id || ''}`,
         failure_redirect_url: `${process.env.APP_URL}/onboarding/connect-failed`,

@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     // 1. Get all active agencies with their settings
     const { data: agencies } = await supabase
       .from('agencies')
-      .select('id, daily_send_limit, send_days, send_start, send_end, timing_preset')
+      .select('id, daily_send_limit, daily_action_limit, send_days, send_start, send_end, timing_preset, voice_profile, vary_messages')
 
     for (const agency of (agencies || [])) {
       try {
@@ -85,6 +85,25 @@ async function processAgency(agency, results) {
   }
 
   let remainingQuota = limit - sentToday
+
+  // 3b. Separate quota for non-message LinkedIn actions (views, likes, follows,
+  // withdraws). LinkedIn rate-limits these independently of messages — capping
+  // them at the message limit alone would under-protect the account, since an
+  // aggressive sequence could pile on dozens of likes/follows with no message
+  // sent at all. We track these via activity_log entries tagged with the action.
+  const { count: actionsToday } = await supabase
+    .from('activity_log')
+    .select('id', { count: 'exact' })
+    .eq('agency_id', agency.id)
+    .eq('type', 'reply')
+    .gte('created_at', todayUTC + 'T00:00:00Z')
+    .in('meta->>action', ['view_profile', 'like_post', 'comment_post', 'follow_profile', 'withdraw_request', 'follow_company'])
+
+  const actionLimit = agency.daily_action_limit || (limit * 3) // social actions are cheaper than messages, default to a more generous cap
+  let remainingActionQuota = actionLimit - (actionsToday || 0)
+  if (remainingActionQuota <= 0) {
+    console.log(`Agency ${agency.id}: daily LinkedIn action limit ${actionLimit} reached (${actionsToday} done) — messages may still send`)
+  }
 
   // 4. Get all active campaigns for this agency
   const { data: campaigns } = await supabase
@@ -157,17 +176,53 @@ async function processAgency(agency, results) {
         }
       }
 
-      // Skip non-message nodes (conditions, social engagement etc — handled separately)
-      if (!['message', 'connection_request'].includes(currentNode.type) && currentNode.type !== 'message') {
-        // Social engagement nodes — advance step without sending a message
-        if (['view_profile', 'like_post', 'comment_post', 'ai_convo'].includes(currentNode.type)) {
-          await advanceLeadStep(lead, campaign, results, agency.id, 'social_action')
+      // Route by node type — social/connection actions (no message content) vs
+      // content-bearing actions (message, connection request, inmail)
+      const SOCIAL_ONLY_TYPES = ['view_profile', 'like_post', 'comment_post', 'ai_convo', 'follow_profile', 'withdraw_request', 'follow_company']
+      const CONTENT_TYPES     = ['message', 'send_connection_request', 'send_inmail', 'connection_request']
+
+      if (SOCIAL_ONLY_TYPES.includes(currentNode.type)) {
+        if (remainingActionQuota <= 0) {
+          // Out of social-action quota for today — leave this lead at the
+          // current step, try again next scheduler run.
           continue
         }
+        const actionOk = await performSocialAction({
+          accountId: client.unipile_account_id,
+          lead,
+          node: currentNode,
+        })
+        if (actionOk) {
+          remainingActionQuota--
+          await supabase.from('activity_log').insert({
+            agency_id: agency.id,
+            type:      'reply',
+            message:   `${SOCIAL_ACTION_LABEL[currentNode.type] || currentNode.type} · ${lead.name}`,
+            meta:      { lead_id: lead.id, campaign: campaign.name, action: currentNode.type },
+          })
+        } else {
+          results.errors.push({ lead_id: lead.id, error: `${currentNode.type} failed` })
+        }
+        await advanceLeadStep(lead, campaign, results, agency.id, 'social_action')
+        await sleep(1000 + Math.random() * 4000)
+        continue
+      }
+
+      if (!CONTENT_TYPES.includes(currentNode.type)) {
+        // Unknown node type (e.g. a future addition) — skip safely rather than crash
+        await advanceLeadStep(lead, campaign, results, agency.id, 'skipped_unknown_type')
+        continue
       }
 
       // Build the personalised message
-      const message = personalise(currentNode.content || '', lead)
+      let message = personalise(currentNode.content || '', lead)
+
+      // Vary the phrasing per-lead so identical templates don't go out
+      // verbatim to everyone — defaults to on, agencies can disable in
+      // Settings if they want exact template control.
+      if (agency.vary_messages !== false && message.trim()) {
+        message = await varyMessage(message, agency.voice_profile)
+      }
 
       results.processed++
 
@@ -198,7 +253,9 @@ async function processAgency(agency, results) {
           accountId:  client.unipile_account_id,
           lead,
           message,
-          type:       currentNode.type === 'connection_request' ? 'connection_request' : 'message',
+          type:       currentNode.type === 'connection_request' || currentNode.type === 'send_connection_request' ? 'connection_request'
+                    : currentNode.type === 'send_inmail' ? 'inmail'
+                    : 'message',
         })
 
         if (sent) {
@@ -234,6 +291,16 @@ async function processAgency(agency, results) {
       await sleep(1000 + Math.random() * 4000)
     }
   }
+}
+
+const SOCIAL_ACTION_LABEL = {
+  view_profile:    'Viewed profile',
+  like_post:       'Liked post',
+  comment_post:    'Commented on post',
+  ai_convo:        'AI conversation step',
+  follow_profile:  'Followed profile',
+  withdraw_request:'Withdrew connection request',
+  follow_company:  'Followed company',
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -320,6 +387,53 @@ function personalise(template, lead) {
     .replace(/\{\{title\}\}/gi,      lead.title || 'your role')
 }
 
+// Rewrites a personalised message so it doesn't look identical to every
+// other lead in the sequence — same intent, different phrasing/structure.
+// Controlled by agency.vary_messages (default on) so agencies that want
+// exact, predictable template control can turn it off.
+async function varyMessage(message, voiceProfile) {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return message // fail open — send the template as-is rather than block sending
+
+  const voiceContext = buildVoiceContextForScheduler(voiceProfile)
+  const prompt = `${voiceContext}Rewrite this outreach message so it reads naturally and doesn't look like a templated mass-message — vary sentence structure and word choice, but keep the same meaning, length, and any {{tokens}} exactly as they are. Don't add new claims or change the ask.\n\nMessage:\n"${message}"\n\nRespond with only the rewritten message, nothing else.`
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        temperature: 1,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    })
+    if (!response.ok) return message
+    const data = await response.json()
+    const text = data.content?.find(b => b.type === 'text')?.text?.trim()
+    return text || message
+  } catch (err) {
+    console.error('varyMessage failed, sending original:', err)
+    return message // fail open
+  }
+}
+
+function buildVoiceContextForScheduler(voiceProfile) {
+  if (!voiceProfile) return ''
+  const { tone, description, doList, dontList } = voiceProfile
+  const TONE_LABEL = {
+    warm_consultative: 'warm and consultative', direct_confident: 'direct and confident',
+    casual_friendly: 'casual and friendly', formal_executive: 'formal and executive-level', playful_bold: 'playful and bold',
+  }
+  const parts = []
+  if (tone && TONE_LABEL[tone]) parts.push(`Tone: ${TONE_LABEL[tone]}.`)
+  if (description?.trim()) parts.push(description.trim())
+  if (doList?.length) parts.push(`Do: ${doList.join('; ')}.`)
+  if (dontList?.length) parts.push(`Avoid: ${dontList.join('; ')}.`)
+  return parts.length ? `${parts.join(' ')}\n\n` : ''
+}
+
 async function advanceLeadStep(lead, campaign, results, agencyId, reason = 'sent') {
   const flowNodes = await flattenFlowForLead(campaign.flow, lead)
   const nextStep = (lead.current_step || 0) + 1
@@ -344,8 +458,10 @@ async function sendViaUnipile({ accountId, lead, message, type }) {
 
   try {
     const endpoint = type === 'connection_request'
-      ? 'https://api.unipile.com:13465/api/v1/linkedin/invitations'
-      : 'https://api.unipile.com:13465/api/v1/linkedin/messages'
+      ? 'https://api49.unipile.com:17927/api/v1/linkedin/invitations'
+      : type === 'inmail'
+      ? 'https://api49.unipile.com:17927/api/v1/linkedin/messages?inmail=true'
+      : 'https://api49.unipile.com:17927/api/v1/linkedin/messages'
 
     const body = type === 'connection_request'
       ? { account_id: accountId, linkedin_member_urn: lead.linkedin_urn, message }
@@ -366,6 +482,99 @@ async function sendViaUnipile({ accountId, lead, message, type }) {
     return true
   } catch (err) {
     console.error('Unipile send exception:', err)
+    return false
+  }
+}
+
+// Performs a no-content LinkedIn action (view, like, follow, withdraw, comment)
+// via Unipile. comment_post and ai_convo need richer handling (AI-generated
+// content based on the lead's recent post / conversation) — for now they log
+// the action and advance the step; full AI-driven content generation for
+// these two is a follow-up, since it requires fetching the lead's actual
+// recent post content from Unipile first.
+async function performSocialAction({ accountId, lead, node }) {
+  const apiKey = process.env.UNIPILE_API_KEY
+  if (!apiKey) return false
+  if (!lead.linkedin_urn) {
+    console.warn(`Lead ${lead.id} has no linkedin_urn — skipping ${node.type}`)
+    return false
+  }
+
+  const base = 'https://api49.unipile.com:17927/api/v1'
+
+  try {
+    let response
+
+    switch (node.type) {
+      case 'view_profile':
+        response = await fetch(`${base}/users/${lead.linkedin_urn}?account_id=${accountId}`, {
+          method: 'GET',
+          headers: { 'X-API-KEY': apiKey },
+        })
+        break
+
+      case 'follow_profile':
+        response = await fetch(`${base}/users/${lead.linkedin_urn}/follow`, {
+          method: 'POST',
+          headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_id: accountId }),
+        })
+        break
+
+      case 'follow_company':
+        if (!lead.company_urn) {
+          console.warn(`Lead ${lead.id} has no company_urn — skipping follow_company`)
+          return false
+        }
+        response = await fetch(`${base}/companies/${lead.company_urn}/follow`, {
+          method: 'POST',
+          headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_id: accountId }),
+        })
+        break
+
+      case 'like_post':
+        if (!lead.last_post_urn) {
+          console.warn(`Lead ${lead.id} has no last_post_urn — skipping like_post`)
+          return false
+        }
+        response = await fetch(`${base}/posts/${lead.last_post_urn}/reaction`, {
+          method: 'POST',
+          headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_id: accountId, reaction: 'like' }),
+        })
+        break
+
+      case 'withdraw_request':
+        response = await fetch(`${base}/users/invite/${lead.linkedin_urn}`, {
+          method: 'DELETE',
+          headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ account_id: accountId }),
+        })
+        break
+
+      case 'comment_post':
+      case 'ai_convo':
+        // Content-generation-dependent actions — log as a no-op success for now.
+        // TODO: fetch lead's recent post via Unipile, generate a comment with
+        // Claude using node.promptHint + the agency voice profile, then POST it.
+        console.log(`${node.type} is a content-dependent action — advancing without sending (not yet wired)`)
+        return true
+
+      default:
+        console.warn(`Unknown social action type: ${node.type}`)
+        return false
+    }
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      console.error(`Unipile ${node.type} error:`, err)
+      return false
+    }
+
+    return true
+  } catch (err) {
+    console.error(`Unipile ${node.type} exception:`, err)
     return false
   }
 }

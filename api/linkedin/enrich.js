@@ -38,7 +38,7 @@ export default async function handler(req, res) {
 
       // Look up the profile via Unipile
       const response = await fetch(
-        `https://api.unipile.com:13465/api/v1/linkedin/profiles/${username}?account_id=${account_id}`,
+        `https://api49.unipile.com:17927/api/v1/linkedin/profiles/${username}?account_id=${account_id}`,
         { headers: { 'X-API-KEY': apiKey } }
       )
 
