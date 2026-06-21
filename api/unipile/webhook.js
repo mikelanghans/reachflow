@@ -45,6 +45,14 @@ export default async function handler(req, res) {
   console.log('Unipile webhook event:', event?.type, event?.id)
 
   try {
+    // Hosted-auth notify_url payload shape is different from the regular
+    // event webhooks below — it has `status` + `account_id` + `name`
+    // (where `name` is the client_id we passed when creating the auth link).
+    if (event.status === 'CREATION_SUCCESS' || event.status === 'RECONNECTED') {
+      await handleAccountConnected(event)
+      return res.status(200).json({ ok: true })
+    }
+
     if (event.type === 'MESSAGE_RECEIVED') {
       await handleMessageReceived(event)
     } else if (event.type === 'INVITATION_ACCEPTED') {
@@ -58,6 +66,45 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: false, error: err.message })
   }
 }
+
+// Called when the hosted-auth flow completes successfully (or a previously
+// disconnected account reconnects). `name` is the client_id we passed in
+// when generating the auth link in api/linkedin/connect.js — that's how we
+// know which client this connection belongs to.
+async function handleAccountConnected(event) {
+  const { account_id, name: client_id, status } = event
+
+  if (!client_id) {
+    console.warn('Account connected webhook fired with no client_id (name field empty) — cannot match to a client. account_id:', account_id)
+    return
+  }
+
+  const { error } = await supabase
+    .from('clients')
+    .update({ unipile_account_id: account_id, linkedin_connected: true })
+    .eq('id', client_id)
+
+  if (error) {
+    console.error('Failed to mark client as LinkedIn-connected:', error)
+    return
+  }
+
+  const { data: client } = await supabase
+    .from('clients')
+    .select('agency_id, name')
+    .eq('id', client_id)
+    .single()
+
+  if (client) {
+    await supabase.from('activity_log').insert({
+      agency_id: client.agency_id,
+      type:      'pipeline',
+      message:   `LinkedIn connected for ${client.name}${status === 'RECONNECTED' ? ' (reconnected)' : ''}`,
+      meta:      { client_id, account_id },
+    })
+  }
+}
+
 
 async function handleMessageReceived(event) {
   const { account_id, sender_profile_id, content, message_id } = event

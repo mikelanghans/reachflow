@@ -24,6 +24,7 @@ export default async function handler(req, res) {
         providers_filters: { include: ['LINKEDIN'] },
         api_url: 'https://api49.unipile.com:17927',
         expiresOn: new Date(Date.now() + 3600000).toISOString(),
+        name: client_id || '',
         success_redirect_url: `${process.env.APP_URL}/onboarding/connected?client_id=${client_id || ''}`,
         failure_redirect_url: `${process.env.APP_URL}/onboarding/connect-failed`,
         notify_url: `${process.env.APP_URL}/api/unipile/webhook`,
