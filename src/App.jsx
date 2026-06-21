@@ -4166,6 +4166,7 @@ function Campaigns({
   onEditFlow,
   campaigns,
   clients,
+  leads = [],
   onDeleteCampaign,
   onToggleCampaign,
   onToggleReviewMode,
@@ -4256,6 +4257,13 @@ function Campaigns({
       {campaigns.map((c) => {
         const score = calcHealth(c);
         const grade = healthGrade(score);
+        // Live count of leads actually assigned to this campaign — the
+        // leads_count column on the campaign row is a denormalized counter
+        // that's easy to leave stale (e.g. assigning a lead after creation
+        // doesn't increment it), so compute it directly here instead.
+        const liveLeadCount = leads.filter(
+          (l) => (l.campaign_id || l.campaign) === c.id,
+        ).length;
         return (
           <div key={c.id} style={{ marginBottom: 8 }}>
             <div
@@ -4292,7 +4300,7 @@ function Campaigns({
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
                 <div style={{ color: T.text, fontSize: 13, fontWeight: 500 }}>
-                  {c.sent} / {c.leads} sent
+                  {c.sent} / {liveLeadCount} sent
                 </div>
                 <div style={{ color: T.muted, fontSize: 12 }}>
                   {c.replies} replies · {c.meetings} meetings
@@ -4325,7 +4333,7 @@ function Campaigns({
                   }}
                 >
                   {[
-                    { label: "Leads", val: c.leads, col: T.blue },
+                    { label: "Leads", val: liveLeadCount, col: T.blue },
                     { label: "Sent", val: c.sent, col: T.text },
                     {
                       label: "Reply Rate",
@@ -19508,6 +19516,7 @@ export default function App() {
             onEditFlow={(c) => setFlowCampaign(c)}
             campaigns={campaigns}
             clients={clients}
+            leads={leads}
             onDeleteCampaign={deleteCampaign}
             onToggleCampaign={toggleCampaign}
             onToggleReviewMode={toggleReviewModeWrapped}
