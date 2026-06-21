@@ -15,6 +15,10 @@ export function useSupabaseData(agencyId) {
   const [leads,     setLeadsState]     = useState([])
   const [activity,  setActivityState]  = useState([])
   const [brand,     setBrandState]     = useState({ name: 'ReachFlow', tagline: 'Agency Console', color: '#2dce98', logoUrl: '' })
+  const [voiceProfile, setVoiceProfileState] = useState({
+    tone: '', doList: [], dontList: [], sampleMessages: [], description: ''
+  })
+  const [varyMessages, setVaryMessagesState] = useState(true)
   const [loading,   setLoading]        = useState(true)
   const [error,     setError]          = useState(null)
 
@@ -47,6 +51,9 @@ export function useSupabaseData(agencyId) {
           color:    agencyData.brand_color   || '#2dce98',
           logoUrl:  agencyData.brand_logo_url || '',
         })
+        setVoiceProfileState(agencyData.voice_profile || {
+          tone: '', doList: [], dontList: [], sampleMessages: [], description: ''
+        })
       }
 
       setClientsState((clientData || []).map(c => ({
@@ -56,6 +63,9 @@ export function useSupabaseData(agencyId) {
         meetings: c.meetings_count, campaigns: 0,
         unipileAccountId: c.unipile_account_id,
         linkedinConnected: c.linkedin_connected,
+        ghlConnected: c.ghl_connected,
+        ghlLocationId: c.ghl_location_id,
+        ghlLastSyncedAt: c.ghl_last_synced_at,
       })))
 
       const clientMap = {}
@@ -86,6 +96,9 @@ export function useSupabaseData(agencyId) {
         status: l.status, unread: l.unread, last: l.last_activity_at ? 'recently' : 'new',
         messages: messagesByLead[l.id] || [],
         triggerKeyword: l.trigger_keyword, triggerPost: l.trigger_post,
+        linkedin_urn: l.linkedin_urn, linkedin_url: l.linkedin_url,
+        sequenceStatus: l.sequence_status, currentStep: l.current_step,
+        ghlContactId: l.ghl_contact_id, email: l.email,
       })))
 
       setActivityState((activityData || []).map(a => ({
@@ -193,13 +206,48 @@ export function useSupabaseData(agencyId) {
       const rows = newLeads.map(l => ({
         agency_id: agencyId, name: l.name, title: l.title, company: l.company,
         initials: l.initials, color: l.color, pipeline_stage: l.pipelineStage || 'prospecting',
-        status: l.status || 'pending', campaign_id: null, client_id: null,
+        status: l.status || 'pending',
+        campaign_id: l.campaign_id || null, client_id: l.client_id || null,
         trigger_keyword: l.triggerKeyword, trigger_post: l.triggerPost,
+        linkedin_urn: l.linkedin_urn || null, linkedin_url: l.linkedin_url || null,
+        email: l.email || null,
       }))
-      await supabase.from('leads').insert(rows)
+      const { data: inserted, error } = await supabase.from('leads').insert(rows).select('id')
+      if (error) {
+        console.error('Lead insert failed:', error)
+      } else if (inserted?.length) {
+        // Replace the temporary numeric ids with the real UUIDs Supabase
+        // generated, so subsequent updates (status changes, etc.) target the
+        // correct row instead of silently no-op'ing against a fake id.
+        const idMap = new Map(newLeads.map((l, i) => [l.id, inserted[i]?.id]).filter(([, real]) => real))
+        setLeadsState(next.map(l => idMap.has(l.id) ? { ...l, id: idMap.get(l.id) } : l))
+        return
+      }
     }
     setLeadsState(next)
   }, [leads, agencyId])
+
+  // Updates one or more existing leads in Supabase (status, pipeline stage,
+  // campaign assignment, etc.) — setLeads above only handles inserting new
+  // leads, so bulk actions like "assign to campaign" need this instead or
+  // they silently only change local state and vanish on refresh.
+  const updateLeadsBulk = useCallback(async (leadIds, updates) => {
+    // Map camelCase app-side field names to snake_case DB columns
+    const dbUpdates = {}
+    if ('campaign_id' in updates)    dbUpdates.campaign_id = updates.campaign_id
+    if ('status' in updates)         dbUpdates.status = updates.status
+    if ('pipelineStage' in updates)  dbUpdates.pipeline_stage = updates.pipelineStage
+    if ('sequenceStatus' in updates) dbUpdates.sequence_status = updates.sequenceStatus
+    if ('currentStep' in updates)    dbUpdates.current_step = updates.currentStep
+
+    const { error } = await supabase.from('leads').update(dbUpdates).in('id', leadIds)
+    if (error) {
+      console.error('updateLeadsBulk failed:', error)
+      throw error
+    }
+
+    setLeadsState(ls => ls.map(l => leadIds.includes(l.id) ? { ...l, ...updates } : l))
+  }, [])
 
   const updateLeadStage = useCallback(async (id, pipelineStage) => {
     await supabase.from('leads').update({ pipeline_stage: pipelineStage, days_in_stage: 0 }).eq('id', id)
@@ -227,20 +275,48 @@ export function useSupabaseData(agencyId) {
 
   // Brand
   const saveBrand = useCallback(async (newBrand) => {
-    await supabase.from('agencies').update({
+    const { error } = await supabase.from('agencies').update({
       brand_name: newBrand.name, brand_color: newBrand.color,
       brand_logo_url: newBrand.logoUrl, brand_tagline: newBrand.tagline,
     }).eq('id', agencyId)
+    if (error) {
+      console.error('saveBrand failed:', error)
+      throw error
+    }
     setBrandState(newBrand)
+  }, [agencyId])
+
+  // Voice profile (agency tone/style used in AI message generation)
+  const saveVoiceProfile = useCallback(async (newVoice) => {
+    const { error } = await supabase.from('agencies').update({
+      voice_profile: newVoice,
+    }).eq('id', agencyId)
+    if (error) {
+      console.error('saveVoiceProfile failed:', error)
+      throw error
+    }
+    setVoiceProfileState(newVoice)
+  }, [agencyId])
+
+  // Whether the scheduler rewrites each outreach message slightly per-lead
+  const saveVaryMessages = useCallback(async (enabled) => {
+    const { error } = await supabase.from('agencies').update({
+      vary_messages: enabled,
+    }).eq('id', agencyId)
+    if (error) {
+      console.error('saveVaryMessages failed:', error)
+      throw error
+    }
+    setVaryMessagesState(enabled)
   }, [agencyId])
 
   return {
     // State
-    clients, campaigns, leads, activity, brand, loading, error,
+    clients, campaigns, leads, activity, brand, voiceProfile, loading, error,
     // Helpers
     addClient, updateClient, deleteClient,
     addCampaign, deleteCampaign, toggleCampaign, toggleReviewMode, saveFlow,
-    setLeads, updateLeadStage, sendMessage, bookMeeting,
-    saveBrand, logActivity, refetch: fetchAll,
+    setLeads, updateLeadStage, updateLeadsBulk, sendMessage, bookMeeting,
+    saveBrand, saveVoiceProfile, logActivity, refetch: fetchAll,
   }
 }
