@@ -424,21 +424,6 @@ export function useSupabaseData(agencyId) {
           linkedin_url: l.linkedin_url || null,
           email: l.email || null,
         }));
-        console.log(
-          "[DEBUG] newLeads before mapping:",
-          JSON.stringify(
-            newLeads.map((l) => ({
-              name: l.name,
-              linkedin_urn: l.linkedin_urn,
-            })),
-          ),
-        );
-        console.log(
-          "[DEBUG] rows being inserted:",
-          JSON.stringify(
-            rows.map((r) => ({ name: r.name, linkedin_urn: r.linkedin_urn })),
-          ),
-        );
         const { data: inserted, error } = await supabase
           .from("leads")
           .insert(rows)
