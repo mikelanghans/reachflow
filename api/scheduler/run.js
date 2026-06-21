@@ -259,6 +259,7 @@ async function processAgency(agency, results) {
           // current step, try again next scheduler run.
           continue;
         }
+        results.processed++;
         const actionOk = await performSocialAction({
           accountId: client.unipile_account_id,
           lead,
