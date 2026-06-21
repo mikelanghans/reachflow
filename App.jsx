@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase.js";
 import AuthScreen from "./AuthScreen.jsx";
 import { useSupabaseData } from "./useSupabaseData.js";
@@ -1549,7 +1549,7 @@ const DEMO_SEARCH_RESULTS = [
   { linkedin_urn: "s112", name: "Priya Nair",     title: "VP Revenue",           company: "Intercom",   location: "San Francisco, CA", degree: "3rd", initials: "PN", linkedin_url: "" },
 ];
 
-function ImportModal({ onClose, onImport }) {
+function ImportModal({ onClose, onImport, clients = [] }) {
   const [tab, setTab] = useState("search");
   const [url, setUrl] = useState("");
   const [stage, setStage] = useState("input");
@@ -1560,6 +1560,8 @@ function ImportModal({ onClose, onImport }) {
   const [listName, setListName] = useState("");
 
   // Native search state
+  const connectedClients = clients.filter(c => c.linkedinConnected && c.unipileAccountId);
+  const [searchClientId, setSearchClientId] = useState(() => connectedClients[0]?.id || "");
   const [searchFilters, setSearchFilters] = useState({ title: "", company: "", industry: "", location: "", degree: "" });
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -1570,20 +1572,38 @@ function ImportModal({ onClose, onImport }) {
   const setFilter = patch => setSearchFilters(f => ({ ...f, ...patch }));
 
   const runSearch = async () => {
+    if (!searchClientId) {
+      pushToast("Connect a client's LinkedIn account first", "error");
+      return;
+    }
     setSearchLoading(true);
     setSearchResults([]);
     setSearchSelected(new Set());
     setSearchScores({});
     try {
-      const params = new URLSearchParams({ account_id: "demo", limit: "20", ...searchFilters });
-      Object.keys(searchFilters).forEach(k => !searchFilters[k] && params.delete(k));
-      const res = await fetch(`/api/linkedin/search?${params.toString()}`);
+      const res = await fetch('/api/linkedin/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: searchClientId,
+          api: 'classic',
+          category: 'people',
+          keywords: [searchFilters.title, searchFilters.company, searchFilters.industry].filter(Boolean).join(' '),
+          title: searchFilters.title || undefined,
+          location: searchFilters.location ? [searchFilters.location] : undefined,
+        }),
+      });
       const data = await res.json();
-      if (data.profiles?.length) {
-        setSearchResults(data.profiles);
-        setSearchSelected(new Set(data.profiles.map(p => p.linkedin_urn)));
+      if (res.ok && data.results?.length) {
+        const mapped = data.results.map(r => ({ ...r, initials: (r.name || "??").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase() }));
+        setSearchResults(mapped);
+        setSearchSelected(new Set(mapped.map(p => p.linkedin_urn)));
+      } else if (res.ok) {
+        setSearchResults([]);
+        pushToast("No results found — try broadening your filters", "info");
       } else {
-        // Demo fallback — show simulated results
+        pushToast(data.error || "Search failed", "error");
+        // Demo fallback so the UI still has something to show during setup
         setSearchResults(DEMO_SEARCH_RESULTS.filter(r =>
           (!searchFilters.title    || r.title.toLowerCase().includes(searchFilters.title.toLowerCase())) &&
           (!searchFilters.industry || r.company.toLowerCase().includes(searchFilters.industry.toLowerCase())) &&
@@ -1592,6 +1612,7 @@ function ImportModal({ onClose, onImport }) {
         setSearchSelected(new Set(DEMO_SEARCH_RESULTS.map(r => r.linkedin_urn)));
       }
     } catch {
+      pushToast("Search failed — showing demo results", "error");
       setSearchResults(DEMO_SEARCH_RESULTS);
       setSearchSelected(new Set(DEMO_SEARCH_RESULTS.map(r => r.linkedin_urn)));
     }
@@ -1704,6 +1725,20 @@ function ImportModal({ onClose, onImport }) {
                 Search LinkedIn directly — no need to leave the app. Filter by title, company, industry, or location. Results are scored against your ICP automatically.
               </div>
 
+              {connectedClients.length === 0 ? (
+                <div style={{ background: T.card, border: `1px solid ${T.yellow}44`, borderRadius: 8, padding: "0.875rem 1rem", marginBottom: "1.25rem", color: T.muted, fontSize: 12.5, lineHeight: 1.6 }}>
+                  <strong style={{ color: T.yellow }}>No connected LinkedIn account.</strong> Connect a client's LinkedIn account in Settings before searching — search runs through their connected account.
+                </div>
+              ) : (
+                <div style={{ marginBottom: "1.125rem" }}>
+                  <div style={{ color: T.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Search using account</div>
+                  <select style={inp} value={searchClientId} onChange={e => setSearchClientId(e.target.value)}>
+                    {connectedClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  <div style={{ color: T.faint, fontSize: 11, marginTop: 4 }}>Results come from this client's connection network — different accounts may surface different people.</div>
+                </div>
+              )}
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: "1rem" }}>
                 {[
                   ["Job title", "title", "e.g. VP Sales"],
@@ -1730,7 +1765,7 @@ function ImportModal({ onClose, onImport }) {
                 </div>
               </div>
 
-              <button onClick={runSearch} disabled={searchLoading || (!searchFilters.title && !searchFilters.industry && !searchFilters.company && !searchFilters.location)}
+              <button onClick={runSearch} disabled={searchLoading || !searchClientId || (!searchFilters.title && !searchFilters.industry && !searchFilters.company && !searchFilters.location)}
                 style={{ width: "100%", background: searchLoading ? T.faint : T.accent, color: searchLoading ? T.muted : "#0d1117", border: "none", borderRadius: 8, padding: "11px", cursor: searchLoading ? "default" : "pointer", fontSize: 13, fontWeight: 700, marginBottom: "0.75rem" }}>
                 {searchLoading ? "Searching LinkedIn…" : "🔍 Search LinkedIn"}
               </button>
@@ -2107,7 +2142,7 @@ function BookmarkletSetup({ onDismiss }) {
 }
 
 // ─── LEADS VIEW ───────────────────────────────────────────────────────────────
-function Leads({ leads, setLeads, logActivity }) {
+function Leads({ leads, setLeads, logActivity, clients = [] }) {
   const [filter, setFilter]         = useState("all");
   const [scoreFilter, setScoreFilter] = useState("all");
   const [showImport, setShowImport] = useState(false);
@@ -2126,14 +2161,47 @@ function Leads({ leads, setLeads, logActivity }) {
     });
 
   const handleImport = (newLeads, name) => {
+    let duplicateCount = 0;
+    let freshCount = 0;
+
     setLeads(existing => {
       const existingIds = new Set(existing.map(l => l.id));
-      const fresh = newLeads.filter(l => !existingIds.has(l.id));
+      // Guard against importing the same person twice — match on LinkedIn URN
+      // (or URL as a fallback) against any lead that's still actively being
+      // sequenced. A lead that previously completed/was suppressed can be
+      // re-added (e.g. for a new campaign), but an active duplicate would mean
+      // the same person gets hit by two sequences at once.
+      const activeUrns = new Set(
+        existing.filter(l => l.sequenceStatus !== 'completed' && l.sequenceStatus !== 'suppressed')
+                .map(l => l.linkedin_urn || l.linkedinUrn)
+                .filter(Boolean)
+      );
+      const activeUrls = new Set(
+        existing.filter(l => l.sequenceStatus !== 'completed' && l.sequenceStatus !== 'suppressed')
+                .map(l => l.linkedin_url || l.linkedinUrl)
+                .filter(Boolean)
+      );
+
+      const fresh = newLeads.filter(l => {
+        if (existingIds.has(l.id)) return false;
+        const urn = l.linkedin_urn || l.linkedinUrn;
+        const url = l.linkedin_url || l.linkedinUrl;
+        if ((urn && activeUrns.has(urn)) || (url && activeUrls.has(url))) {
+          duplicateCount++;
+          return false;
+        }
+        return true;
+      });
+      freshCount = fresh.length;
+
       return [...existing, ...fresh];
     });
-    if (logActivity) logActivity("import", `${newLeads.length} leads imported: ${name}`, { count: newLeads.length, listName: name });
-    setToast(`✓ ${newLeads.length} leads imported into "${name}"`);
-    setTimeout(() => setToast(null), 3500);
+
+    if (logActivity) logActivity("import", `${freshCount} leads imported: ${name}`, { count: freshCount, listName: name });
+    setToast(duplicateCount > 0
+      ? `✓ ${freshCount} leads imported · ${duplicateCount} skipped (already in an active sequence)`
+      : `✓ ${freshCount} leads imported into "${name}"`);
+    setTimeout(() => setToast(null), 4000);
   };
 
   const toggleSelect = (id) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -2158,7 +2226,7 @@ function Leads({ leads, setLeads, logActivity }) {
 
   return (
     <div>
-      {showImport && <ImportModal onClose={() => setShowImport(false)} onImport={handleImport} />}
+      {showImport && <ImportModal onClose={() => setShowImport(false)} onImport={handleImport} clients={clients} />}
 
       {toast && (
         <div style={{ position: "fixed", bottom: "1.5rem", right: "1.5rem", background: T.card, border: `1px solid ${T.accent}`, borderRadius: 10, padding: "12px 18px", color: T.accent, fontSize: 13, fontWeight: 600, zIndex: 200, boxShadow: "0 4px 24px rgba(0,0,0,0.4)" }}>
@@ -3628,7 +3696,7 @@ function GlobalSearch({ onClose, onNavigate }) {
 }
 
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
-function Settings({ brand = DEFAULT_BRAND, onBrandChange, voiceProfile = DEFAULT_VOICE_PROFILE, onVoiceProfileChange }) {
+function Settings({ brand = DEFAULT_BRAND, onBrandChange, voiceProfile = DEFAULT_VOICE_PROFILE, onVoiceProfileChange, clients = [], onGhlConnected }) {
   const [settings, setSettings] = useLocalStorage("rf_settings", {
     emailConnected: false, fromName: "", replyTo: "", signature: "", dailyLimit: 15
   });
@@ -3644,6 +3712,119 @@ function Settings({ brand = DEFAULT_BRAND, onBrandChange, voiceProfile = DEFAULT
   const [newDoItem, setNewDoItem] = useState("");
   const [newDontItem, setNewDontItem] = useState("");
   const [newSample, setNewSample] = useState("");
+
+  // GHL connection state
+  const [ghlClientId, setGhlClientId] = useState(() => clients[0]?.id || "");
+  const [ghlLocationId, setGhlLocationId] = useState("");
+  const [ghlToken, setGhlToken] = useState("");
+  const [ghlTesting, setGhlTesting] = useState(false);
+  const [ghlError, setGhlError] = useState("");
+  const [ghlSuccess, setGhlSuccess] = useState("");
+  const [ghlSyncing, setGhlSyncing] = useState(false);
+
+  const selectedGhlClient = clients.find(c => c.id === ghlClientId);
+
+  const connectGHL = async () => {
+    if (!ghlClientId || !ghlLocationId.trim() || !ghlToken.trim()) return;
+    setGhlTesting(true);
+    setGhlError("");
+    setGhlSuccess("");
+    try {
+      const res = await fetch("/api/ghl/connect", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: ghlClientId, location_id: ghlLocationId.trim(), private_token: ghlToken.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setGhlSuccess(`Connected to ${data.location_name}`);
+        setGhlToken("");
+        if (onGhlConnected) onGhlConnected();
+      } else {
+        setGhlError(data.error || "Connection failed");
+      }
+    } catch {
+      setGhlError("Connection failed — check your network and try again");
+    }
+    setGhlTesting(false);
+  };
+
+  const syncGHL = async (direction) => {
+    if (!ghlClientId) return;
+    setGhlSyncing(true);
+    setGhlError("");
+    setGhlSuccess("");
+    try {
+      const res = await fetch("/api/ghl/sync", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: ghlClientId, direction }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const r = data.results;
+        setGhlSuccess(direction === "push"
+          ? `Synced ${r.synced} lead${r.synced !== 1 ? "s" : ""} to GoHighLevel${r.failed ? ` (${r.failed} failed)` : ""}`
+          : `Imported ${r.imported} contact${r.imported !== 1 ? "s" : ""} from GoHighLevel${r.failed ? ` (${r.failed} failed)` : ""}`);
+      } else {
+        setGhlError(data.error || "Sync failed");
+      }
+    } catch {
+      setGhlError("Sync failed — check your network and try again");
+    }
+    setGhlSyncing(false);
+  };
+
+  // ── LinkedIn account connection (per client, via Unipile) ──────────────────
+  const [liClientId, setLiClientId] = useState(() => clients[0]?.id || "");
+  const [liConnecting, setLiConnecting] = useState(false);
+  const [liDisconnecting, setLiDisconnecting] = useState(false);
+  const [liError, setLiError] = useState("");
+  const selectedLiClient = clients.find(c => c.id === liClientId);
+
+  const connectLinkedIn = async () => {
+    if (!liClientId) return;
+    setLiConnecting(true);
+    setLiError("");
+    try {
+      const res = await fetch("/api/linkedin/connect", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: liClientId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.auth_url) {
+        // Open the Unipile hosted-auth flow in a new tab. The webhook
+        // (configured in Unipile) marks the client connected in Supabase
+        // once the user finishes logging in on LinkedIn's side.
+        window.open(data.auth_url, "_blank", "noopener,noreferrer");
+      } else {
+        setLiError(data.error || "Couldn't start LinkedIn connection");
+      }
+    } catch {
+      setLiError("Connection failed — check your network and try again");
+    }
+    setLiConnecting(false);
+  };
+
+  const disconnectLinkedIn = async () => {
+    if (!liClientId) return;
+    setLiDisconnecting(true);
+    setLiError("");
+    try {
+      const res = await fetch("/api/linkedin/disconnect", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: liClientId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        pushToast("LinkedIn account disconnected", "success");
+        if (onGhlConnected) onGhlConnected(); // reuses the same refetch callback — refreshes client list either way
+      } else {
+        setLiError(data.error || "Disconnect failed");
+      }
+    } catch {
+      setLiError("Disconnect failed — check your network and try again");
+    }
+    setLiDisconnecting(false);
+  };
 
   // Load real user info from Supabase auth
   useEffect(() => {
@@ -3858,27 +4039,58 @@ function Settings({ brand = DEFAULT_BRAND, onBrandChange, voiceProfile = DEFAULT
 
       <div style={card}>
         <div style={sectionTitle}>LinkedIn account</div>
-        <div style={sectionSub}>Your connected LinkedIn profile used for outreach campaigns</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 44, height: 44, background: "#0077b5", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "#fff", fontSize: 18, flexShrink: 0 }}>in</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ color: T.text, fontWeight: 600, fontSize: 14 }}>{settings.fromName || "Your account"}</div>
-            <div style={{ color: T.muted, fontSize: 12 }}>Connected via Unipile OAuth</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 7, height: 7, borderRadius: "50%", background: T.green }} />
-            <span style={{ color: T.green, fontSize: 12, fontWeight: 600 }}>Active</span>
-          </div>
-        </div>
-        <div style={{ marginTop: "1rem", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-          {[["Daily limit", settings.dailyLimit + " actions"], ["This week", "94 sent"], ["Account health", "Good ✓"]].map(([l, v]) => (
-            <div key={l} style={{ background: T.surface, borderRadius: 8, padding: "8px 10px" }}>
-              <div style={{ color: T.muted, fontSize: 10, marginBottom: 2 }}>{l}</div>
-              <div style={{ color: T.text, fontSize: 13, fontWeight: 600 }}>{v}</div>
+        <div style={sectionSub}>Connect a client's LinkedIn account — outreach for that client runs through it via Unipile.</div>
+
+        {clients.length === 0 ? (
+          <div style={{ color: T.muted, fontSize: 12.5 }}>Add a client first, then connect their LinkedIn account here.</div>
+        ) : (
+          <>
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={label}>Client</label>
+              <select style={{ ...inp, cursor: "pointer" }} value={liClientId} onChange={e => { setLiClientId(e.target.value); setLiError(""); }}>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
             </div>
-          ))}
-        </div>
-        <button style={{ marginTop: "0.875rem", background: "transparent", color: T.red, border: `1px solid ${T.red}44`, borderRadius: 7, padding: "7px 14px", cursor: "pointer", fontSize: 12 }}>Disconnect account</button>
+
+            {liError && (
+              <div style={{ background: "rgba(248,81,73,0.10)", border: `1px solid ${T.red}44`, borderRadius: 8, padding: "9px 12px", color: T.red, fontSize: 12.5, marginBottom: "1rem" }}>
+                {liError}
+              </div>
+            )}
+
+            {selectedLiClient?.linkedinConnected ? (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "1rem" }}>
+                  <div style={{ width: 44, height: 44, background: "#0077b5", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: "#fff", fontSize: 18, flexShrink: 0 }}>in</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ color: T.text, fontWeight: 600, fontSize: 14 }}>{selectedLiClient.name}</div>
+                    <div style={{ color: T.muted, fontSize: 12 }}>Connected via Unipile</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: 7, height: 7, borderRadius: "50%", background: T.green }} />
+                    <span style={{ color: T.green, fontSize: 12, fontWeight: 600 }}>Connected</span>
+                  </div>
+                </div>
+                <button onClick={disconnectLinkedIn} disabled={liDisconnecting}
+                  style={{ background: "transparent", color: T.red, border: `1px solid ${T.red}44`, borderRadius: 7, padding: "7px 14px", cursor: liDisconnecting ? "default" : "pointer", fontSize: 12, fontWeight: 600, opacity: liDisconnecting ? 0.6 : 1 }}>
+                  {liDisconnecting ? "Disconnecting…" : "Disconnect account"}
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1rem", color: T.muted, fontSize: 12.5 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: T.faint }} />
+                  Not connected
+                </div>
+                <button onClick={connectLinkedIn} disabled={liConnecting}
+                  style={{ background: liConnecting ? T.faint : T.accent, color: "#0d1117", border: "none", borderRadius: 8, padding: "9px 18px", cursor: liConnecting ? "default" : "pointer", fontSize: 13, fontWeight: 700 }}>
+                  {liConnecting ? "Opening LinkedIn…" : "Connect LinkedIn"}
+                </button>
+                <div style={{ color: T.faint, fontSize: 11, marginTop: 6 }}>Opens a new tab to log in — comes back here once connected (may take a few seconds to show).</div>
+              </>
+            )}
+          </>
+        )}
       </div>
 
       <div style={card}>
@@ -3927,6 +4139,66 @@ function Settings({ brand = DEFAULT_BRAND, onBrandChange, voiceProfile = DEFAULT
             </div>
           </div>
         )}
+      </div>
+
+      {/* ── GoHighLevel integration ── */}
+      <div style={card}>
+        <div style={sectionTitle}>GoHighLevel</div>
+        <div style={sectionSub}>Sync leads to GHL as contacts, or pull contacts in as leads. Each client connects their own sub-account using a Private Integration Token.</div>
+
+        {clients.length === 0 ? (
+          <div style={{ color: T.muted, fontSize: 12.5 }}>Add a client first to connect their GoHighLevel account.</div>
+        ) : (<>
+          <div style={{ marginBottom: 12 }}>
+            <label style={label}>Client</label>
+            <select style={{ ...inp, cursor: "pointer" }} value={ghlClientId} onChange={e => { setGhlClientId(e.target.value); setGhlError(""); setGhlSuccess(""); }}>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+
+          {selectedGhlClient?.ghlConnected ? (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: "1.125rem", background: T.surface, borderRadius: 9, padding: "0.875rem" }}>
+                <span style={{ fontSize: 20 }}>🟢</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: T.text, fontSize: 13, fontWeight: 600 }}>{selectedGhlClient.name} — GHL connected</div>
+                  <div style={{ color: T.muted, fontSize: 12 }}>{selectedGhlClient.ghlLastSyncedAt ? `Last synced ${new Date(selectedGhlClient.ghlLastSyncedAt).toLocaleString()}` : "Not yet synced"}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: T.green }} />
+                  <span style={{ color: T.green, fontSize: 12, fontWeight: 600 }}>Connected</span>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => syncGHL("push")} disabled={ghlSyncing}
+                  style={{ flex: 1, background: ghlSyncing ? T.faint : T.accentBg, color: ghlSyncing ? T.muted : T.accent, border: `1px solid ${T.accent}44`, borderRadius: 7, padding: "9px", cursor: ghlSyncing ? "default" : "pointer", fontSize: 12.5, fontWeight: 700 }}>
+                  {ghlSyncing ? "Syncing…" : "↑ Push leads to GHL"}
+                </button>
+                <button onClick={() => syncGHL("pull")} disabled={ghlSyncing}
+                  style={{ flex: 1, background: ghlSyncing ? T.faint : T.card, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 7, padding: "9px", cursor: ghlSyncing ? "default" : "pointer", fontSize: 12.5, fontWeight: 600 }}>
+                  {ghlSyncing ? "Syncing…" : "↓ Pull contacts from GHL"}
+                </button>
+              </div>
+            </div>
+          ) : (<>
+            <div style={{ marginBottom: 12 }}>
+              <label style={label}>Location ID</label>
+              <input style={inp} placeholder="Found in GHL: Settings → Business Info" value={ghlLocationId} onChange={e => setGhlLocationId(e.target.value)} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={label}>Private Integration Token</label>
+              <input type="password" style={inp} placeholder="Generated in GHL: Settings → Private Integrations → Create" value={ghlToken} onChange={e => setGhlToken(e.target.value)} />
+              <div style={{ color: T.faint, fontSize: 11, marginTop: 4 }}>In the sub-account you want to connect — not the agency-level settings.</div>
+            </div>
+            <button onClick={connectGHL} disabled={ghlTesting || !ghlLocationId.trim() || !ghlToken.trim()}
+              style={{ background: ghlTesting ? T.faint : T.accent, color: ghlTesting ? T.muted : "#0d1117", border: "none", borderRadius: 8, padding: "9px 18px", cursor: ghlTesting ? "default" : "pointer", fontSize: 13, fontWeight: 700 }}>
+              {ghlTesting ? "Testing connection…" : "Connect GoHighLevel"}
+            </button>
+          </>)}
+
+          {ghlError && <div style={{ marginTop: 10, background: "rgba(248,81,73,0.10)", border: `1px solid ${T.red}44`, borderRadius: 8, padding: "0.75rem 1rem", color: T.red, fontSize: 12.5, lineHeight: 1.5 }}>{ghlError}</div>}
+          {ghlSuccess && <div style={{ marginTop: 10, background: T.accentDim, border: `1px solid ${T.accent}44`, borderRadius: 8, padding: "0.75rem 1rem", color: T.accent, fontSize: 12.5, lineHeight: 1.5 }}>✓ {ghlSuccess}</div>}
+        </>)}
       </div>
 
       <div style={card}>
@@ -4223,6 +4495,11 @@ const NODE_COLORS = {
   like_post:    { bg: "rgba(248,81,73,0.10)",    border: T.red,     icon: "♥",  iconBg: T.red },
   comment_post: { bg: "rgba(210,153,34,0.10)",   border: T.yellow,  icon: "💬", iconBg: T.yellow },
   ai_convo:     { bg: "rgba(45,206,152,0.10)",   border: T.accent,  icon: "✦",  iconBg: T.accent },
+  follow_profile:          { bg: "rgba(88,166,255,0.10)",  border: T.blue,   icon: "➕", iconBg: T.blue },
+  send_connection_request: { bg: "rgba(45,206,152,0.10)",  border: T.accent, icon: "🤝", iconBg: T.accent },
+  withdraw_request:        { bg: "rgba(248,81,73,0.10)",   border: T.red,    icon: "↩",  iconBg: T.red },
+  send_inmail:             { bg: "rgba(188,140,255,0.10)", border: T.purple, icon: "✉",  iconBg: T.purple },
+  follow_company:          { bg: "rgba(88,166,255,0.10)",  border: T.blue,   icon: "🏢", iconBg: T.blue },
   end:          { bg: T.faint + "44",            border: T.faint,   icon: "◼",  iconBg: T.muted },
 };
 const CH_COLOR = { linkedin: T.blue, email: T.purple };
@@ -4233,6 +4510,11 @@ const SOCIAL_NODE_LABEL = {
   like_post:    "Like Post",
   comment_post: "Comment on Post",
   ai_convo:     "AI Conversation",
+  follow_profile:          "Follow Profile",
+  send_connection_request: "Send Connection Request",
+  withdraw_request:        "Withdraw Request",
+  send_inmail:             "Send InMail",
+  follow_company:          "Follow Company",
 };
 
 let _nextId = 100;
@@ -4253,8 +4535,8 @@ function FlowNode({ node, depth = 0, onEdit, selected, onSelect, showStats }) {
     </div>
   );
 
-  // Social engagement nodes (view_profile, like_post, comment_post, ai_convo)
-  if (["view_profile", "like_post", "comment_post", "ai_convo"].includes(node.type)) {
+  // Social/LinkedIn action nodes (no rich content needed, just a label + note)
+  if (["view_profile", "like_post", "comment_post", "ai_convo", "follow_profile", "withdraw_request", "follow_company"].includes(node.type)) {
     const nc = NODE_COLORS[node.type];
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -4267,6 +4549,30 @@ function FlowNode({ node, depth = 0, onEdit, selected, onSelect, showStats }) {
             <span style={{ background: T.blue + "22", color: T.blue, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4 }}>LinkedIn</span>
           </div>
           {node.note && <div style={{ color: T.muted, fontSize: 12, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{node.note}</div>}
+          <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 5 }}>
+            {node.delay > 0 && <span style={{ color: T.faint, fontSize: 11 }}>Day {node.delay}</span>}
+            <span style={{ background: nc.bg, color: nc.iconBg, fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3 }}>⏱ Smart timing</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Message-style nodes (message, send_connection_request, send_inmail) — have editable content
+  if (["message", "send_connection_request", "send_inmail"].includes(node.type)) {
+    const ch = node.channel || "linkedin";
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+        {depth > 0 && <div style={{ width: 2, height: 20, background: T.border }} />}
+        <div onClick={() => { onSelect(node.id); onEdit(node); }}
+          style={{ background: isSelected ? nc.bg : T.card, border: `1.5px solid ${isSelected ? nc.border : T.border}`, borderRadius: 12, padding: "0.875rem 1rem", width: 300, cursor: "pointer", transition: "all 0.15s" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div style={{ width: 26, height: 26, borderRadius: 7, background: nc.iconBg + "22", color: nc.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{nc.icon}</div>
+            <span style={{ color: T.text, fontSize: 13, fontWeight: 600, flex: 1 }}>{node.type === "message" ? (node.label || "Message") : SOCIAL_NODE_LABEL[node.type]}</span>
+            {node.type === "message" && <span style={{ background: CH_COLOR[ch] + "22", color: CH_COLOR[ch], fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4 }}>{CH_LABEL[ch]}</span>}
+            {node.type !== "message" && <span style={{ background: T.blue + "22", color: T.blue, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4 }}>LinkedIn</span>}
+          </div>
+          {node.content && <div style={{ color: T.muted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{node.content}</div>}
           <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 5 }}>
             {node.delay > 0 && <span style={{ color: T.faint, fontSize: 11 }}>Day {node.delay}</span>}
             <span style={{ background: nc.bg, color: nc.iconBg, fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3 }}>⏱ Smart timing</span>
@@ -4374,6 +4680,16 @@ function FlowBuilder({ campaign, onClose, savedFlow, onSave, voiceProfile = DEFA
     if (type === "like_post")     node = { id, type: "like_post",     delay: 1, note: "Likes their most recent post" };
     if (type === "comment_post")  node = { id, type: "comment_post",  delay: 2, note: "", promptHint: "Write a genuine, insightful comment on their post. 1-2 sentences. No pitch." };
     if (type === "ai_convo")      node = { id, type: "ai_convo",      delay: 0, note: "AI manages conversation to book a meeting", goal: "book_meeting" };
+    if (type === "follow_profile")
+      node = { id, type: "follow_profile", delay: 0, note: "Follows the prospect's profile — low-key way to appear in their feed before reaching out." };
+    if (type === "send_connection_request")
+      node = { id, type: "send_connection_request", delay: 1, content: "", note: "Sends a LinkedIn connection request with an optional personalized note." };
+    if (type === "withdraw_request")
+      node = { id, type: "withdraw_request", delay: 7, note: "Withdraws a pending connection request that hasn't been accepted — keeps your pending-invite count healthy." };
+    if (type === "send_inmail")
+      node = { id, type: "send_inmail", delay: 0, content: "Hi {{first_name}}, ", note: "Sends a LinkedIn InMail — works even without a connection, uses InMail credits." };
+    if (type === "follow_company")
+      node = { id, type: "follow_company", delay: 0, note: "Follows the prospect's company page." };
     if (node) { setFlow(f => [...f, node]); setEditNode(node); setSelectedId(node.id); }
   };
 
@@ -4385,6 +4701,7 @@ function FlowBuilder({ campaign, onClose, savedFlow, onSave, voiceProfile = DEFA
   };
 
   const [drafting, setDrafting] = useState(false);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const draftMessage = async (instructions = "") => {
     setDrafting(true);
     const voiceContext = buildVoiceContext(voiceProfile);
@@ -4400,6 +4717,85 @@ function FlowBuilder({ campaign, onClose, savedFlow, onSave, voiceProfile = DEFA
       if (text) setEditNode(n => ({ ...n, content: text }));
     } catch {}
     setDrafting(false);
+  };
+
+  // ── Build-with-AI wizard: describe a sequence in plain language (typed or
+  // spoken), and Claude generates the full flow JSON in one shot. ──────────
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardInput, setWizardInput] = useState("");
+  const [wizardGenerating, setWizardGenerating] = useState(false);
+  const [wizardError, setWizardError] = useState("");
+  const [wizardListening, setWizardListening] = useState(false);
+  const recognitionRef = useRef(null);
+
+  const toggleVoiceInput = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setWizardError("Voice input isn't supported in this browser — try Chrome, or just type your description.");
+      return;
+    }
+    if (wizardListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.onresult = (e) => {
+      let transcript = "";
+      for (let i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
+      setWizardInput(transcript);
+    };
+    recognition.onend = () => setWizardListening(false);
+    recognition.onerror = () => setWizardListening(false);
+    recognitionRef.current = recognition;
+    recognition.start();
+    setWizardListening(true);
+  };
+
+  const generateFlowFromWizard = async () => {
+    if (!wizardInput.trim()) return;
+    setWizardGenerating(true);
+    setWizardError("");
+    const voiceContext = buildVoiceContext(voiceProfile);
+    const schemaGuide = `Available node types and their exact JSON shape:
+- {"id": <number>, "type": "message", "channel": "linkedin"|"email", "label": <string>, "delay": <days as number>, "content": <message text using {{first_name}} {{company}} {{title}} {{last_name}} tokens>}
+- {"id": <number>, "type": "view_profile", "delay": <number>, "note": <string>}
+- {"id": <number>, "type": "follow_profile", "delay": <number>, "note": <string>}
+- {"id": <number>, "type": "like_post", "delay": <number>, "note": <string>}
+- {"id": <number>, "type": "comment_post", "delay": <number>, "promptHint": <string>}
+- {"id": <number>, "type": "send_connection_request", "delay": <number>, "content": <optional note, ≤300 chars, or empty string>}
+- {"id": <number>, "type": "withdraw_request", "delay": <number>, "note": <string>}
+- {"id": <number>, "type": "send_inmail", "delay": <number>, "content": <message text>}
+- {"id": <number>, "type": "follow_company", "delay": <number>, "note": <string>}
+- {"id": <number>, "type": "ai_convo", "delay": <number>, "goal": "book_meeting"|"get_referral"|"nurture"|"qualify"}
+- {"id": <number>, "type": "condition", "trigger": "replied"|"connected"|"no_reply", "delayDays": <number>, "yes": [<array of nodes, same shapes>], "no": [<array of nodes>]}
+- {"id": <number>, "type": "ab_split", "label": <string>, "splitPct": <number 10-90>, "a": [<nodes>], "b": [<nodes>]}
+- {"id": <number>, "type": "end", "label": <string>, "outcome": "replied"|"no_reply"}
+
+Every branch (yes/no, a/b) must end with an "end" node. ids must be unique integers across the whole flow, starting from 200.`;
+
+    const prompt = `${voiceContext}You are building a LinkedIn outreach sequence for a sales/agency tool. Convert this plain-language description into a flow as a JSON array of nodes.\n\nDescription: "${wizardInput.trim()}"\n\n${schemaGuide}\n\nRespond with ONLY a valid JSON array (the flow) — no markdown fences, no explanation, no preamble.`;
+
+    try {
+      const res = await fetch("/api/claude", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 2000, messages: [{ role: "user", content: prompt }] }),
+      });
+      const data = await res.json();
+      const text = data.content?.find(b => b.type === "text")?.text?.trim() || "";
+      const cleaned = text.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+      if (!Array.isArray(parsed) || !parsed.length) throw new Error("Empty flow generated");
+      setFlow(parsed);
+      setWizardOpen(false);
+      setWizardInput("");
+      setSaved(false);
+    } catch (err) {
+      setWizardError("Couldn't generate a flow from that description — try being more specific about the steps and timing, or build it manually below.");
+    }
+    setWizardGenerating(false);
   };
 
   const inp = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, color: T.text, padding: "9px 12px", fontSize: 13, outline: "none", fontFamily: "inherit", width: "100%", boxSizing: "border-box" };
@@ -4430,21 +4826,51 @@ function FlowBuilder({ campaign, onClose, savedFlow, onSave, voiceProfile = DEFA
             <button key={id} onClick={() => setTab(id)} style={{ background: tab === id ? T.surface : "transparent", color: tab === id ? T.text : T.muted, border: "none", borderRadius: 6, padding: "5px 14px", cursor: "pointer", fontSize: 12, fontWeight: tab === id ? 600 : 400 }}>{label}{id === "results" && abCount > 0 && <span style={{ background: T.purple + "33", color: T.purple, fontSize: 10, fontWeight: 800, padding: "1px 5px", borderRadius: 3, marginLeft: 5 }}>{abCount}</span>}</button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          {tab === "flow" && [
-          ["+ Message",  "message",      T.accentBg,              T.accent],
-          ["+ Condition","condition",    "rgba(210,153,34,0.12)", T.yellow],
-          ["+ A/B Test", "ab_split",     "rgba(188,140,255,0.10)",T.purple],
-          ["👤 View",    "view_profile", "rgba(88,166,255,0.10)", T.blue],
-          ["♥ Like",     "like_post",    "rgba(248,81,73,0.10)",  T.red],
-          ["💬 Comment", "comment_post", "rgba(210,153,34,0.10)", T.yellow],
-          ["✦ AI Convo", "ai_convo",     T.accentBg,              T.accent],
-        ].map(([lbl, type, bg, col]) => (
-          <button key={type} onClick={() => addNode(type)}
-            style={{ background: bg, color: col, border: `1px solid ${col}44`, borderRadius: 7, padding: "6px 10px", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
-            {lbl}
+        <div style={{ display: "flex", gap: 6, position: "relative" }}>
+          {tab === "flow" && (<>
+          <button onClick={() => setWizardOpen(true)}
+            style={{ background: "linear-gradient(135deg, rgba(45,206,152,0.18), rgba(88,166,255,0.14))", color: T.accent, border: `1px solid ${T.accent}66`, borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
+            ✦ Build with AI
           </button>
-        ))}
+          {[
+            ["+ Message",  "message",      T.accentBg,              T.accent],
+            ["+ Condition","condition",    "rgba(210,153,34,0.12)", T.yellow],
+            ["+ A/B Test", "ab_split",     "rgba(188,140,255,0.10)",T.purple],
+          ].map(([lbl, type, bg, col]) => (
+            <button key={type} onClick={() => addNode(type)}
+              style={{ background: bg, color: col, border: `1px solid ${col}44`, borderRadius: 7, padding: "6px 10px", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
+              {lbl}
+            </button>
+          ))}
+          <div style={{ position: "relative" }}>
+            <button onClick={() => setActionMenuOpen(o => !o)}
+              style={{ background: "rgba(88,166,255,0.10)", color: T.blue, border: `1px solid ${T.blue}44`, borderRadius: 7, padding: "6px 10px", cursor: "pointer", fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+              + LinkedIn Action ▾
+            </button>
+            {actionMenuOpen && (
+              <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, padding: 6, minWidth: 200, boxShadow: "0 8px 24px rgba(0,0,0,0.35)", zIndex: 10 }}>
+                {[
+                  ["👤 View Profile",          "view_profile"],
+                  ["➕ Follow Profile",        "follow_profile"],
+                  ["♥ Like Post",              "like_post"],
+                  ["💬 Comment on Post",       "comment_post"],
+                  ["🤝 Send Connection Request","send_connection_request"],
+                  ["↩ Withdraw Request",       "withdraw_request"],
+                  ["✉ Send InMail",            "send_inmail"],
+                  ["🏢 Follow Company",        "follow_company"],
+                  ["✦ AI Conversation",        "ai_convo"],
+                ].map(([lbl, type]) => (
+                  <button key={type} onClick={() => { addNode(type); setActionMenuOpen(false); }}
+                    style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", color: T.text, border: "none", borderRadius: 6, padding: "7px 9px", cursor: "pointer", fontSize: 12.5 }}
+                    onMouseEnter={e => e.currentTarget.style.background = T.card}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          </>)}
         </div>
         <button onClick={handleSave} style={{ background: saved ? T.green : T.accent, color: "#0d1117", border: "none", borderRadius: 8, padding: "8px 18px", cursor: "pointer", fontSize: 13, fontWeight: 700, minWidth: 80, transition: "background 0.2s" }}>
           {saved ? "✓ Saved" : "Save flow"}
@@ -4469,7 +4895,7 @@ function FlowBuilder({ campaign, onClose, savedFlow, onSave, voiceProfile = DEFA
                   {editNode.type === "ab_split" ? "Edit A/B test" : editNode.type === "condition" ? "Edit condition" : editNode.type === "end" ? "Edit end step" : SOCIAL_NODE_LABEL[editNode.type] ? `Edit: ${SOCIAL_NODE_LABEL[editNode.type]}` : "Edit message"}
                 </div>
 
-                {["view_profile","like_post","comment_post","ai_convo"].includes(editNode.type) && (<>
+                {["view_profile","like_post","comment_post","ai_convo","follow_profile","withdraw_request","follow_company"].includes(editNode.type) && (<>
                   <div style={{ background: NODE_COLORS[editNode.type]?.bg, border: `1px solid ${NODE_COLORS[editNode.type]?.border}44`, borderRadius: 9, padding: "0.875rem", marginBottom: 12 }}>
                     <div style={{ color: NODE_COLORS[editNode.type]?.iconBg, fontSize: 22, marginBottom: 4 }}>{NODE_COLORS[editNode.type]?.icon}</div>
                     <div style={{ color: T.text, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{SOCIAL_NODE_LABEL[editNode.type]}</div>
@@ -4478,6 +4904,9 @@ function FlowBuilder({ campaign, onClose, savedFlow, onSave, voiceProfile = DEFA
                       {editNode.type === "like_post"     && "Likes their most recent LinkedIn post. Signals genuine interest and puts your name in their notifications."}
                       {editNode.type === "comment_post"  && "AI writes a genuine, contextual comment on their most recent post. The comment is based on what they actually wrote — not a generic response."}
                       {editNode.type === "ai_convo"      && "Once connected, AI manages the conversation — responding to replies, handling objections, and steering toward the goal you set."}
+                      {editNode.type === "follow_profile"   && "Follows the prospect's profile. A quiet signal that often gets noticed without feeling like a pitch."}
+                      {editNode.type === "withdraw_request" && "Withdraws a connection request that's gone unanswered. Keeps your pending invitations under LinkedIn's limit."}
+                      {editNode.type === "follow_company"   && "Follows the prospect's company page — useful before or after connecting."}
                     </div>
                   </div>
                   <div style={{ marginBottom: 12 }}>
@@ -4505,6 +4934,40 @@ function FlowBuilder({ campaign, onClose, savedFlow, onSave, voiceProfile = DEFA
                     </div>
                   )}
                 </>)}
+
+                {["send_connection_request","send_inmail"].includes(editNode.type) && (<>
+                  <div style={{ background: NODE_COLORS[editNode.type]?.bg, border: `1px solid ${NODE_COLORS[editNode.type]?.border}44`, borderRadius: 9, padding: "0.875rem", marginBottom: 12 }}>
+                    <div style={{ color: NODE_COLORS[editNode.type]?.iconBg, fontSize: 22, marginBottom: 4 }}>{NODE_COLORS[editNode.type]?.icon}</div>
+                    <div style={{ color: T.text, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{SOCIAL_NODE_LABEL[editNode.type]}</div>
+                    <div style={{ color: T.muted, fontSize: 12, lineHeight: 1.5 }}>
+                      {editNode.type === "send_connection_request" && "Sends a LinkedIn connection request. A note is optional — connectionless invites tend to get accepted at a similar rate."}
+                      {editNode.type === "send_inmail" && "Sends a LinkedIn InMail. Works even without a connection — uses your InMail credits."}
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ color: T.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>Send delay (days after previous step)</div>
+                    <input type="number" min={0} max={30} style={inp} value={editNode.delay || 0} onChange={e => setEditNode(n => ({ ...n, delay: Number(e.target.value) }))} />
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                      <div style={{ color: T.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                        {editNode.type === "send_connection_request" ? "Note (optional)" : "Message"}
+                      </div>
+                      <button onClick={() => draftMessage(editNode.type === "send_connection_request" ? "Write a short LinkedIn connection request note (max 300 characters). Reference something specific and genuine — not generic flattery." : undefined)} disabled={drafting}
+                        style={{ background: drafting ? T.faint : T.accentBg, color: T.accent, border: "none", borderRadius: 6, padding: "4px 10px", cursor: drafting ? "default" : "pointer", fontSize: 11, fontWeight: 700, opacity: drafting ? 0.7 : 1 }}>
+                        {drafting ? "Drafting…" : editNode.content?.trim() ? "↻ Regenerate" : "✦ AI Draft"}
+                      </button>
+                    </div>
+                    <textarea rows={editNode.type === "send_connection_request" ? 3 : 6} maxLength={editNode.type === "send_connection_request" ? 300 : undefined}
+                      style={{ ...inp, resize: "vertical", lineHeight: 1.6 }} value={editNode.content || ""} onChange={e => setEditNode(n => ({ ...n, content: e.target.value }))} />
+                    <div style={{ color: T.faint, fontSize: 11, marginTop: 4 }}>
+                      Variables: {"{{first_name}}"} {"{{company}}"}
+                      {editNode.type === "send_connection_request" && <> · {300 - (editNode.content?.length || 0)} characters left · leaving this blank sends a connectionless invite</>}
+                    </div>
+                  </div>
+                </>)}
+
+
 
                 {editNode.type === "message" && (<>
                   <div style={{ marginBottom: 12 }}>
@@ -4720,6 +5183,41 @@ function FlowBuilder({ campaign, onClose, savedFlow, onSave, voiceProfile = DEFA
                 <div style={{ fontSize: 13 }}>Go back to the Flow tab and click <strong style={{ color: T.purple }}>+ A/B Test</strong> to add one</div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Build-with-AI wizard modal ── */}
+      {wizardOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, padding: "1rem" }}>
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, width: "100%", maxWidth: 560, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ color: T.text, fontSize: 16, fontWeight: 700 }}>✦ Build with AI</div>
+                <div style={{ color: T.muted, fontSize: 12, marginTop: 2 }}>Describe the sequence you want — type it or talk it through</div>
+              </div>
+              <button onClick={() => { setWizardOpen(false); setWizardError(""); if (wizardListening) recognitionRef.current?.stop(); }} style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 4px" }}>×</button>
+            </div>
+            <div style={{ padding: "1.5rem" }}>
+              <div style={{ position: "relative", marginBottom: 12 }}>
+                <textarea rows={5} style={{ ...inp, resize: "vertical", lineHeight: 1.6, paddingRight: 44 }}
+                  placeholder={`e.g. "Visit their profile, wait a day, then send a connection request. If they accept, follow up after 2 days asking about their pipeline. If they don't reply after 5 days, send one InMail and end the sequence."`}
+                  value={wizardInput} onChange={e => setWizardInput(e.target.value)} />
+                <button onClick={toggleVoiceInput} title={wizardListening ? "Stop recording" : "Speak your description"}
+                  style={{ position: "absolute", right: 8, top: 8, width: 30, height: 30, borderRadius: "50%", background: wizardListening ? T.red : T.accentBg, color: wizardListening ? "#fff" : T.accent, border: "none", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {wizardListening ? "◼" : "🎙"}
+                </button>
+              </div>
+              {wizardListening && <div style={{ color: T.red, fontSize: 11, fontWeight: 600, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: T.red, animation: "pulse 1.5s infinite" }} />Listening…</div>}
+              {wizardError && <div style={{ background: "rgba(248,81,73,0.10)", border: `1px solid ${T.red}44`, borderRadius: 8, padding: "0.75rem 1rem", color: T.red, fontSize: 12.5, lineHeight: 1.5, marginBottom: 12 }}>{wizardError}</div>}
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: "0.75rem 1rem", marginBottom: "1.25rem", color: T.muted, fontSize: 12, lineHeight: 1.6 }}>
+                This replaces the current flow. Mention timing ("wait 2 days"), conditions ("if they reply" / "if they don't respond"), and which actions to use — view profile, follow, like, comment, connect, InMail, or message.
+              </div>
+              <button onClick={generateFlowFromWizard} disabled={wizardGenerating || !wizardInput.trim()}
+                style={{ width: "100%", background: wizardGenerating ? T.faint : T.accent, color: wizardGenerating ? T.muted : "#0d1117", border: "none", borderRadius: 8, padding: "11px", cursor: wizardGenerating ? "default" : "pointer", fontSize: 13, fontWeight: 700 }}>
+                {wizardGenerating ? "Building your sequence…" : "✦ Generate flow"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -5485,7 +5983,7 @@ export default function App() {
   const { clients, campaigns, leads, activity, brand, voiceProfile,
           addClient, updateClient, deleteClient,
           addCampaign, deleteCampaign, toggleCampaign, toggleReviewMode,
-          setLeads, saveFlow: dbSaveFlow, logActivity, saveBrand, saveVoiceProfile } = db;
+          setLeads, saveFlow: dbSaveFlow, logActivity, saveBrand, saveVoiceProfile, refetch } = db;
 
   CLIENTS = clients; CAMPAIGNS = campaigns; LEADS = leads;
 
@@ -5570,7 +6068,7 @@ export default function App() {
         {view === "queue" && <ReviewQueue campaigns={campaigns} onToggleReviewMode={toggleReviewModeWrapped} logActivity={logActivity} agencyId={agencyId} />}
 
         {/* 4. Skeleton loaders in Leads */}
-        {view === "leads"      && <Leads leads={leads} setLeads={setLeads} logActivity={logActivity} loading={db.loading} />}
+        {view === "leads"      && <Leads leads={leads} setLeads={setLeads} logActivity={logActivity} loading={db.loading} clients={clients} />}
 
         {view === "triggers"   && <TriggerMonitor leads={leads} setLeads={setLeads} logActivity={logActivity} />}
         {view === "analytics"  && <Analytics />}
@@ -5578,7 +6076,7 @@ export default function App() {
         {view === "seo"        && <SEOReviewer />}
         {view === "social"     && <SocialMedia />}
         {view === "coach"      && <Coach />}
-        {view === "settings"   && <Settings brand={brand} voiceProfile={voiceProfile}
+        {view === "settings"   && <Settings brand={brand} voiceProfile={voiceProfile} clients={clients} onGhlConnected={refetch}
           onBrandChange={async b => { try { await saveBrand(b); pushToast("Brand settings saved", "success"); } catch { pushToast("Couldn't save brand settings — try again", "error"); throw new Error("save failed"); } }}
           onVoiceProfileChange={async v => { try { await saveVoiceProfile(v); pushToast("Voice profile saved", "success"); } catch { pushToast("Couldn't save voice profile — try again", "error"); throw new Error("save failed"); } }}
         />}
