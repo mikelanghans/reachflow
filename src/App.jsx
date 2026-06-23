@@ -1432,7 +1432,7 @@ function HealthBadge({ score, small = false }) {
 }
 
 // ─── CAMPAIGNS ───────────────────────────────────────────────────────────────
-function Campaigns({ onNew, onTemplates, onEditFlow, campaigns, clients, leads = [], onDeleteCampaign, onToggleCampaign, onToggleReviewMode }) {
+function Campaigns({ onNew, onTemplates, onEditFlow, campaigns, clients, onDeleteCampaign, onToggleCampaign, onToggleReviewMode }) {
   const [expanded, setExpanded]   = useState(null);
   const [healthOpen, setHealthOpen] = useState(null);
 
@@ -1460,11 +1460,6 @@ function Campaigns({ onNew, onTemplates, onEditFlow, campaigns, clients, leads =
       {campaigns.map(c => {
         const score = calcHealth(c);
         const grade = healthGrade(score);
-        // Live count of leads actually assigned to this campaign — the
-        // leads_count column on the campaign row is a denormalized counter
-        // that's easy to leave stale (e.g. assigning a lead after creation
-        // doesn't increment it), so compute it directly here instead.
-        const liveLeadCount = leads.filter(l => (l.campaign_id || l.campaign) === c.id).length;
         return (
           <div key={c.id} style={{ marginBottom: 8 }}>
             <div
@@ -1475,7 +1470,7 @@ function Campaigns({ onNew, onTemplates, onEditFlow, campaigns, clients, leads =
                 <div style={{ color: T.muted, fontSize: 12 }}>{c.client} · {c.channel}</div>
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <div style={{ color: T.text, fontSize: 13, fontWeight: 500 }}>{c.sent} / {liveLeadCount} sent</div>
+                <div style={{ color: T.text, fontSize: 13, fontWeight: 500 }}>{c.sent} / {c.leads} sent</div>
                 <div style={{ color: T.muted, fontSize: 12 }}>{c.replies} replies · {c.meetings} meetings</div>
               </div>
               {/* Health badge */}
@@ -1488,7 +1483,7 @@ function Campaigns({ onNew, onTemplates, onEditFlow, campaigns, clients, leads =
               <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderTop: "none", borderRadius: "0 0 10px 10px", padding: "1rem 1.125rem" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: "1rem" }}>
                   {[
-                    { label: "Leads",      val: liveLeadCount, col: T.blue },
+                    { label: "Leads",      val: c.leads, col: T.blue },
                     { label: "Sent",       val: c.sent,  col: T.text },
                     { label: "Reply Rate", val: c.sent ? Math.round(c.replies / c.sent * 100) + "%" : "—", col: T.accent },
                     { label: "Meetings",   val: c.meetings, col: T.purple },
@@ -2147,7 +2142,7 @@ function BookmarkletSetup({ onDismiss }) {
 }
 
 // ─── LEADS VIEW ───────────────────────────────────────────────────────────────
-function Leads({ leads, setLeads, updateLeadsBulk, logActivity, clients = [], campaigns = [] }) {
+function Leads({ leads, setLeads, logActivity, clients = [] }) {
   const [filter, setFilter]         = useState("all");
   const [scoreFilter, setScoreFilter] = useState("all");
   const [showImport, setShowImport] = useState(false);
@@ -2214,31 +2209,7 @@ function Leads({ leads, setLeads, updateLeadsBulk, logActivity, clients = [], ca
   const clearSel     = () => setSelected(new Set());
 
   const bulkDelete   = () => { if (window.confirm(`Delete ${selected.size} lead${selected.size > 1 ? "s" : ""}?`)) { setLeads(ls => ls.filter(l => !selected.has(l.id))); clearSel(); } };
-  const bulkStatus   = async (status) => {
-    const ids = [...selected];
-    setLeads(ls => ls.map(l => selected.has(l.id) ? { ...l, status } : l)); // optimistic
-    clearSel();
-    if (updateLeadsBulk) {
-      try { await updateLeadsBulk(ids, { status }); }
-      catch { setToast("Couldn't save status change — try again"); setTimeout(() => setToast(null), 4000); }
-    }
-  };
-  const [showAssignMenu, setShowAssignMenu] = useState(false);
-  const bulkAssignCampaign = async (campaignId, campaignName) => {
-    const ids = [...selected];
-    setLeads(ls => ls.map(l => selected.has(l.id) ? { ...l, campaign: campaignId, campaign_id: campaignId } : l)); // optimistic
-    setShowAssignMenu(false);
-    clearSel();
-    if (updateLeadsBulk) {
-      try {
-        await updateLeadsBulk(ids, { campaign_id: campaignId, sequenceStatus: "active", currentStep: 0 });
-        setToast(`✓ ${ids.length} lead${ids.length > 1 ? "s" : ""} assigned to "${campaignName}"`);
-      } catch {
-        setToast("Couldn't assign campaign — try again");
-      }
-      setTimeout(() => setToast(null), 4000);
-    }
-  };
+  const bulkStatus   = (status) => { setLeads(ls => ls.map(l => selected.has(l.id) ? { ...l, status } : l)); clearSel(); };
   const bulkExport   = () => {
     const rows = [["Name","Title","Company","Campaign","Status"]];
     leads.filter(l => selected.has(l.id)).forEach(l => rows.push([l.name, l.title, l.company, l.campaign, l.status]));
@@ -2277,32 +2248,13 @@ function Leads({ leads, setLeads, updateLeadsBulk, logActivity, clients = [], ca
       {selected.size > 0 && (
         <div style={{ background: T.surface, border: `1px solid ${T.accent}`, borderRadius: 10, padding: "0.75rem 1rem", marginBottom: "0.875rem", display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ color: T.accent, fontSize: 13, fontWeight: 700 }}>{selected.size} selected</span>
-          <div style={{ flex: 1, display: "flex", gap: 8, position: "relative" }}>
+          <div style={{ flex: 1, display: "flex", gap: 8 }}>
             <button onClick={bulkDelete} style={{ background: T.red + "22", color: T.red, border: `1px solid ${T.red}44`, borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>✕ Delete</button>
             {["pending","connected","replied","meeting"].map(s => (
               <button key={s} onClick={() => bulkStatus(s)} style={{ background: T.card, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 12 }}>
                 → {STATUS_LABEL[s]}
               </button>
             ))}
-            {campaigns.length > 0 && (
-              <div style={{ position: "relative" }}>
-                <button onClick={() => setShowAssignMenu(o => !o)} style={{ background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}44`, borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-                  + Assign to campaign ▾
-                </button>
-                {showAssignMenu && (
-                  <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, padding: 6, minWidth: 220, boxShadow: "0 8px 24px rgba(0,0,0,0.35)", zIndex: 20, maxHeight: 280, overflowY: "auto" }}>
-                    {campaigns.map(c => (
-                      <button key={c.id} onClick={() => bulkAssignCampaign(c.id, c.name)}
-                        style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", color: T.text, border: "none", borderRadius: 6, padding: "8px 10px", cursor: "pointer", fontSize: 12.5 }}
-                        onMouseEnter={e => e.currentTarget.style.background = T.card}
-                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                        {c.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
             <button onClick={bulkExport} style={{ background: T.card, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 12 }}>↓ Export</button>
           </div>
           <button onClick={clearSel} style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button>
@@ -3533,97 +3485,7 @@ const TEMPLATES = [
       { day: 5, type: "✦ AI Conversation",       msg: "Once connected, AI manages the conversation — responding to replies, handling objections, and steering toward a booked call at the right moment.", why: "The AI knows the full context: what you commented on, their ICP, past replies. It paces the conversation to feel natural rather than rushing to the pitch." },
     ],
   },
-  {
-    id: 6, name: "Coach Client Outreach", tag: "For coaches", tagCol: T.green,
-    desc: "Built for coaches and consultants filling 1:1 or group programs. Warms up the prospect with genuine engagement before connecting, then has a built-in fallback path if the connection request goes unanswered.",
-    replyRate: "20–28%", bestFor: "Coaches, consultants, and course creators booking discovery calls",
-    steps: [
-      { day: 0, type: "👤 Visit Profile",         msg: "AI visits the prospect's profile first. They'll see your name in their 'Who viewed your profile' notifications before you've said anything.", why: "Plants your name with zero commitment. Coaches especially benefit here — prospects often check who's been looking before they accept anything." },
-      { day: 0, type: "➕ Follow Profile",          msg: "AI follows the prospect right after viewing.", why: "A second low-friction touchpoint. Following (rather than connecting) feels less forward and builds familiarity first." },
-      { day: 0, type: "♥ Like Recent Post",        msg: "AI likes their most recent post.", why: "Genuine, visible engagement. By now they've seen your name three times with no ask attached." },
-      { day: 0, type: "💬 Comment on Post",        msg: "AI writes a real, contextual comment referencing what they actually posted — not a generic line.", why: "The highest-signal step. A thoughtful comment shows you read their content, which matters a lot in coaching niches built on trust." },
-      { day: 0, type: "✉ Send Connection Request", msg: "Hi {{first_name}}, I've really enjoyed your posts on [topic] — especially your take on [specific thing]. I work with [ICP] on [outcome] and would love to connect.", why: "Referencing their actual content makes this feel earned, not cold. Acceptance rates run well above a blind connection request." },
-      { day: 5, type: "🔀 Check: Request Accepted?", msg: "AI checks whether the connection request was accepted after a 5-day wait.", why: "This is the branch point. Coaches' audiences can be slow to respond — 5 days gives room without letting the lead go cold." },
-      { day: 5, type: "✅ If Accepted → Send Message", msg: "Hi {{first_name}}, thanks for connecting! I help [ICP] with [outcome] — would love to hear what you're working on right now. Worth a quick chat?", why: "Leads with curiosity about them, not a pitch. Easiest possible first reply to give." },
-      { day: 7, type: "❌ If Not Accepted → Visit Profile + Follow Company", msg: "AI re-visits the profile and follows their company page.", why: "A gentle second wave of visibility instead of giving up. Following the company is a softer signal than chasing the person directly." },
-      { day: 8, type: "❌ Withdraw Request / Send InMail", msg: "AI withdraws the unanswered connection request, then sends a short InMail: Hi {{first_name}}, no worries if now's not the time to connect — wanted to share [resource/insight] in case it's useful.", why: "Withdrawing keeps your pending-request count clean for future outreach. The InMail gives one more low-pressure touch without being pushy." },
-      { day: 10, type: "❌ Comment on Post (final touch)", msg: "AI leaves one more genuine comment on a newer post.", why: "A last, no-ask touchpoint. Keeps you visible for when their situation changes, without it feeling like chasing." },
-    ],
-  },
 ];
-
-// Maps each TEMPLATES.id to an actual Flow Builder node array (same shape as
-// DEFAULT_FLOW / addNode below), so "Use template" clones a real, runnable
-// sequence instead of just displaying the preview text.
-const TEMPLATE_FLOWS = {
-  1: [ // SaaS Sales Demo
-    { id: 1, type: "message", channel: "linkedin", label: "Connection Request", delay: 0,
-      content: "Hi {{first_name}}, I noticed {{company}} is scaling fast — I work with similar teams on [specific problem]. Thought it'd be worth connecting." },
-    { id: 2, type: "message", channel: "linkedin", label: "Follow-up", delay: 3,
-      content: "Thanks for connecting, {{first_name}}. Quick question — is [specific challenge] something that's on your radar right now at {{company}}?" },
-    { id: 3, type: "message", channel: "linkedin", label: "Value Add", delay: 4,
-      content: "Thought this might be useful — [relevant insight or resource]. Happy to walk you through how we've helped teams like {{company}} with this. Worth a 20 min call?" },
-    { id: 4, type: "end", label: "End sequence", outcome: "no_reply" },
-  ],
-  2: [ // Technical Recruiting
-    { id: 1, type: "message", channel: "linkedin", label: "Connection Request", delay: 0,
-      content: "Hi {{first_name}}, your work on [specific tech/project] caught my eye. I'm connecting with senior [role] engineers — would love to be in your network." },
-    { id: 2, type: "message", channel: "linkedin", label: "Role Intro", delay: 4,
-      content: "{{first_name}}, working on something I think you'd find interesting — a [role] role at [company type] using [tech stack]. No pressure at all, but curious if you're open to a conversation?" },
-    { id: 3, type: "message", channel: "linkedin", label: "Final Follow-up", delay: 5,
-      content: "Still thinking of you for this one, {{first_name}}. The team is strong and the problem space is genuinely interesting. Happy to share more if timing's ever right." },
-    { id: 4, type: "end", label: "End sequence", outcome: "no_reply" },
-  ],
-  3: [ // Agency New Business
-    { id: 1, type: "message", channel: "linkedin", label: "Connection Request", delay: 0,
-      content: "Hi {{first_name}}, I work with [industry] companies on [outcome — e.g. 'filling their pipeline with qualified meetings']. Thought we'd be worth connecting." },
-    { id: 2, type: "message", channel: "linkedin", label: "Social Proof", delay: 3,
-      content: "We recently helped [similar company type] go from [X] to [Y] in [timeframe]. Not sure if the timing's right for {{company}}, but happy to share what we did if useful?" },
-    { id: 3, type: "message", channel: "linkedin", label: "Soft CTA", delay: 5,
-      content: "Last message — I know inboxes are busy. If you ever want to compare notes on what's working for outreach in [their industry], I'm an open book. No pitch." },
-    { id: 4, type: "end", label: "End sequence", outcome: "no_reply" },
-  ],
-  4: [ // Warm Network Reactivation
-    { id: 1, type: "message", channel: "linkedin", label: "Re-engagement", delay: 0,
-      content: "{{first_name}}! Been a while. I saw {{company}} has been [recent news/milestone] — congrats. Hope things are going well on your end." },
-    { id: 2, type: "message", channel: "linkedin", label: "Soft Intro", delay: 2,
-      content: "I've been working on something I think you'd find interesting given your background in [area]. Would love to get your take on it over a quick call?" },
-    { id: 3, type: "end", label: "End sequence", outcome: "no_reply" },
-  ],
-  5: [ // Social Warming Sequence
-    { id: 1, type: "view_profile", delay: 0, note: "Visits the prospect's profile. They'll see your name in their 'Who viewed your profile' notifications." },
-    { id: 2, type: "like_post", delay: 1, note: "Likes their most recent post." },
-    { id: 3, type: "comment_post", delay: 1, note: "", promptHint: "Write a genuine, contextual comment referencing what they actually posted. 1-2 sentences. No pitch." },
-    { id: 4, type: "comment_post", delay: 1, note: "", promptHint: "Comment on a different post from the previous week, on a different topic, to show breadth rather than a one-off." },
-    { id: 5, type: "send_connection_request", delay: 1,
-      content: "Hi {{first_name}}, I've been following your posts on [topic] — your take on [specific thing] really resonated. I work with [ICP] on [outcome]. Would love to connect." },
-    { id: 6, type: "ai_convo", delay: 1, note: "AI manages the conversation — responding to replies, handling objections, and steering toward a booked call.", goal: "book_meeting" },
-  ],
-  6: [ // Coach Client Outreach — true branch on whether the connection was accepted
-    { id: 1, type: "view_profile", delay: 0, note: "Visits the prospect's profile first. They'll see your name in their 'Who viewed your profile' notifications before you've said anything." },
-    { id: 2, type: "follow_profile", delay: 0, note: "Follows the prospect right after viewing — a second low-friction touchpoint." },
-    { id: 3, type: "like_post", delay: 0, note: "Likes their most recent post." },
-    { id: 4, type: "comment_post", delay: 0, note: "", promptHint: "Write a real, contextual comment referencing what they actually posted — not a generic line." },
-    { id: 5, type: "send_connection_request", delay: 0,
-      content: "Hi {{first_name}}, I've really enjoyed your posts on [topic] — especially your take on [specific thing]. I work with [ICP] on [outcome] and would love to connect." },
-    { id: 6, type: "condition", trigger: "connected", delayDays: 5,
-      yes: [
-        { id: 7, type: "message", channel: "linkedin", label: "Send Message", delay: 0,
-          content: "Hi {{first_name}}, thanks for connecting! I help [ICP] with [outcome] — would love to hear what you're working on right now. Worth a quick chat?" },
-        { id: 8, type: "end", label: "Move to inbox", outcome: "replied" },
-      ],
-      no: [
-        { id: 9,  type: "view_profile",   delay: 2, note: "Re-visits the profile for a second wave of visibility instead of giving up." },
-        { id: 10, type: "follow_company", delay: 0, note: "Follows their company page — a softer signal than chasing the person directly." },
-        { id: 11, type: "withdraw_request", delay: 1, note: "Withdraws the unanswered connection request to keep your pending-invite count healthy." },
-        { id: 12, type: "send_inmail", delay: 0,
-          content: "Hi {{first_name}}, no worries if now's not the time to connect — wanted to share [resource/insight] in case it's useful." },
-        { id: 13, type: "comment_post", delay: 2, note: "", promptHint: "Leave one more genuine comment on a newer post — a last, no-ask touchpoint." },
-        { id: 14, type: "end", label: "End sequence", outcome: "no_reply" },
-      ],
-    },
-  ],
-};
 
 function TemplatesModal({ onClose, onUse }) {
   const [open, setOpen] = useState(null);
@@ -3692,9 +3554,9 @@ function TemplatesModal({ onClose, onUse }) {
 }
 
 // ─── NEW CAMPAIGN MODAL ──────────────────────────────────────────────────────
-function NewCampaignModal({ onClose, onLaunchFlow, clients = DEFAULT_CLIENTS, initialFlow = null, templateName = null, launching = false }) {
+function NewCampaignModal({ onClose, onLaunchFlow, clients = DEFAULT_CLIENTS }) {
   const [step, setStep] = useState(0); // 0=details, 1=ready
-  const [name, setCampaignName] = useState(templateName ? `${templateName} Campaign` : "");
+  const [name, setCampaignName] = useState("");
   const [client, setClient] = useState("");
   const [channel, setChannel] = useState("linkedin");
 
@@ -3706,7 +3568,7 @@ function NewCampaignModal({ onClose, onLaunchFlow, clients = DEFAULT_CLIENTS, in
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, width: "100%", maxWidth: 480, overflow: "hidden" }}>
         <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ color: T.text, fontSize: 16, fontWeight: 700 }}>New campaign</div>
-          <button onClick={launching ? undefined : onClose} disabled={launching} style={{ background: "transparent", border: "none", color: launching ? T.faint : T.muted, cursor: launching ? "default" : "pointer", fontSize: 20 }}>×</button>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", fontSize: 20 }}>×</button>
         </div>
 
         <div style={{ padding: "1.5rem" }}>
@@ -3715,16 +3577,11 @@ function NewCampaignModal({ onClose, onLaunchFlow, clients = DEFAULT_CLIENTS, in
               <div style={{ color: T.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Campaign name</div>
               <input style={inp} placeholder="e.g. Q3 SaaS Outreach" value={name} onChange={e => setCampaignName(e.target.value)} autoFocus />
             </div>
-            {templateName && (
-              <div style={{ display: "flex", alignItems: "center", gap: 6, background: T.accentBg, border: `1px solid ${T.accent}`, borderRadius: 8, padding: "8px 10px", marginBottom: 14, fontSize: 12, color: T.accent }}>
-                <span>⑃</span> Starting from the <strong>{templateName}</strong> template — steps will be pre-loaded in the Flow Builder.
-              </div>
-            )}
             <div style={{ marginBottom: 14 }}>
               <div style={{ color: T.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Client</div>
               <select style={{ ...inp, cursor: "pointer" }} value={client} onChange={e => setClient(e.target.value)}>
                 <option value="">Select a client…</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {CLIENTS.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
               </select>
             </div>
             <div style={{ marginBottom: "1.5rem" }}>
@@ -3745,11 +3602,11 @@ function NewCampaignModal({ onClose, onLaunchFlow, clients = DEFAULT_CLIENTS, in
             <div style={{ textAlign: "center", padding: "0.5rem 0 1.5rem" }}>
               <div style={{ fontSize: 36, marginBottom: "0.875rem" }}>🎯</div>
               <div style={{ color: T.text, fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{name}</div>
-              <div style={{ color: T.muted, fontSize: 13, marginBottom: "1.5rem" }}>{clients.find(c => c.id === client)?.name || client} · {channel === "both" ? "LinkedIn + Email" : channel === "linkedin" ? "LinkedIn" : "Email"}</div>
+              <div style={{ color: T.muted, fontSize: 13, marginBottom: "1.5rem" }}>{client} · {channel === "both" ? "LinkedIn + Email" : channel === "linkedin" ? "LinkedIn" : "Email"}</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <button onClick={() => onLaunchFlow({ name, client_id: client, channel, flow: initialFlow || [] })} disabled={launching} style={{ background: launching ? T.faint : T.accent, color: launching ? T.muted : "#0d1117", border: "none", borderRadius: 10, padding: "12px", cursor: launching ? "default" : "pointer", fontSize: 14, fontWeight: 700 }}>{launching ? "Creating campaign…" : "Build flow in Flow Builder →"}</button>
-                <button onClick={() => { onClose(); }} disabled={launching} style={{ background: T.card, color: launching ? T.faint : T.text, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px", cursor: launching ? "default" : "pointer", fontSize: 13 }}>Start from a template instead</button>
-                <button onClick={onClose} disabled={launching} style={{ background: "transparent", color: T.muted, border: "none", cursor: launching ? "default" : "pointer", fontSize: 12, padding: "6px" }}>Save as draft — build sequence later</button>
+                <button onClick={() => { onLaunchFlow({ name, client, channel }); onClose(); }} style={{ background: T.accent, color: "#0d1117", border: "none", borderRadius: 10, padding: "12px", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>Build flow in Flow Builder →</button>
+                <button onClick={() => { onClose(); }} style={{ background: T.card, color: T.text, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px", cursor: "pointer", fontSize: 13 }}>Start from a template instead</button>
+                <button onClick={onClose} style={{ background: "transparent", color: T.muted, border: "none", cursor: "pointer", fontSize: 12, padding: "6px" }}>Save as draft — build sequence later</button>
               </div>
             </div>
           </>)}
@@ -4663,7 +4520,7 @@ const SOCIAL_NODE_LABEL = {
 let _nextId = 100;
 const nextId = () => ++_nextId;
 
-function FlowNode({ node, depth = 0, onEdit, selected, onSelect, showStats, onDelete }) {
+function FlowNode({ node, depth = 0, onEdit, selected, onSelect, showStats }) {
   const nc = NODE_COLORS[node.type] || NODE_COLORS.end;
   const isSelected = selected === node.id;
 
@@ -4684,23 +4541,17 @@ function FlowNode({ node, depth = 0, onEdit, selected, onSelect, showStats, onDe
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
         {depth > 0 && <div style={{ width: 2, height: 20, background: T.border }} />}
-        <div style={{ position: "relative", width: 300 }}>
-          {onDelete && (
-            <button onClick={e => { e.stopPropagation(); onDelete(node.id); }} title="Delete step"
-              style={{ position: "absolute", top: -8, right: -8, width: 22, height: 22, borderRadius: "50%", background: T.card, border: `1px solid ${T.border}`, color: T.muted, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2, lineHeight: 1 }}>×</button>
-          )}
-          <div onClick={() => { onSelect(node.id); onEdit(node); }}
-            style={{ background: isSelected ? nc.bg : T.card, border: `1.5px solid ${isSelected ? nc.border : T.border}`, borderRadius: 12, padding: "0.875rem 1rem", width: "100%", cursor: "pointer", transition: "all 0.15s", boxSizing: "border-box" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: node.note ? 6 : 0 }}>
-              <div style={{ width: 26, height: 26, borderRadius: 7, background: nc.iconBg + "22", color: nc.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{nc.icon}</div>
-              <span style={{ color: T.text, fontSize: 13, fontWeight: 600, flex: 1 }}>{SOCIAL_NODE_LABEL[node.type]}</span>
-              <span style={{ background: T.blue + "22", color: T.blue, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4 }}>LinkedIn</span>
-            </div>
-            {node.note && <div style={{ color: T.muted, fontSize: 12, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{node.note}</div>}
-            <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 5 }}>
-              {node.delay > 0 && <span style={{ color: T.faint, fontSize: 11 }}>Day {node.delay}</span>}
-              <span style={{ background: nc.bg, color: nc.iconBg, fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3 }}>⏱ Smart timing</span>
-            </div>
+        <div onClick={() => { onSelect(node.id); onEdit(node); }}
+          style={{ background: isSelected ? nc.bg : T.card, border: `1.5px solid ${isSelected ? nc.border : T.border}`, borderRadius: 12, padding: "0.875rem 1rem", width: 300, cursor: "pointer", transition: "all 0.15s" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: node.note ? 6 : 0 }}>
+            <div style={{ width: 26, height: 26, borderRadius: 7, background: nc.iconBg + "22", color: nc.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{nc.icon}</div>
+            <span style={{ color: T.text, fontSize: 13, fontWeight: 600, flex: 1 }}>{SOCIAL_NODE_LABEL[node.type]}</span>
+            <span style={{ background: T.blue + "22", color: T.blue, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4 }}>LinkedIn</span>
+          </div>
+          {node.note && <div style={{ color: T.muted, fontSize: 12, fontStyle: "italic", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{node.note}</div>}
+          <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 5 }}>
+            {node.delay > 0 && <span style={{ color: T.faint, fontSize: 11 }}>Day {node.delay}</span>}
+            <span style={{ background: nc.bg, color: nc.iconBg, fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3 }}>⏱ Smart timing</span>
           </div>
         </div>
       </div>
@@ -4713,24 +4564,18 @@ function FlowNode({ node, depth = 0, onEdit, selected, onSelect, showStats, onDe
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
         {depth > 0 && <div style={{ width: 2, height: 20, background: T.border }} />}
-        <div style={{ position: "relative", width: 300 }}>
-          {onDelete && (
-            <button onClick={e => { e.stopPropagation(); onDelete(node.id); }} title="Delete step"
-              style={{ position: "absolute", top: -8, right: -8, width: 22, height: 22, borderRadius: "50%", background: T.card, border: `1px solid ${T.border}`, color: T.muted, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2, lineHeight: 1 }}>×</button>
-          )}
-          <div onClick={() => { onSelect(node.id); onEdit(node); }}
-            style={{ background: isSelected ? nc.bg : T.card, border: `1.5px solid ${isSelected ? nc.border : T.border}`, borderRadius: 12, padding: "0.875rem 1rem", width: "100%", cursor: "pointer", transition: "all 0.15s", boxSizing: "border-box" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-              <div style={{ width: 26, height: 26, borderRadius: 7, background: nc.iconBg + "22", color: nc.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{nc.icon}</div>
-              <span style={{ color: T.text, fontSize: 13, fontWeight: 600, flex: 1 }}>{node.type === "message" ? (node.label || "Message") : SOCIAL_NODE_LABEL[node.type]}</span>
-              {node.type === "message" && <span style={{ background: CH_COLOR[ch] + "22", color: CH_COLOR[ch], fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4 }}>{CH_LABEL[ch]}</span>}
-              {node.type !== "message" && <span style={{ background: T.blue + "22", color: T.blue, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4 }}>LinkedIn</span>}
-            </div>
-            {node.content && <div style={{ color: T.muted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{node.content}</div>}
-            <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 5 }}>
-              {node.delay > 0 && <span style={{ color: T.faint, fontSize: 11 }}>Day {node.delay}</span>}
-              <span style={{ background: nc.bg, color: nc.iconBg, fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3 }}>⏱ Smart timing</span>
-            </div>
+        <div onClick={() => { onSelect(node.id); onEdit(node); }}
+          style={{ background: isSelected ? nc.bg : T.card, border: `1.5px solid ${isSelected ? nc.border : T.border}`, borderRadius: 12, padding: "0.875rem 1rem", width: 300, cursor: "pointer", transition: "all 0.15s" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div style={{ width: 26, height: 26, borderRadius: 7, background: nc.iconBg + "22", color: nc.iconBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{nc.icon}</div>
+            <span style={{ color: T.text, fontSize: 13, fontWeight: 600, flex: 1 }}>{node.type === "message" ? (node.label || "Message") : SOCIAL_NODE_LABEL[node.type]}</span>
+            {node.type === "message" && <span style={{ background: CH_COLOR[ch] + "22", color: CH_COLOR[ch], fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4 }}>{CH_LABEL[ch]}</span>}
+            {node.type !== "message" && <span style={{ background: T.blue + "22", color: T.blue, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4 }}>LinkedIn</span>}
+          </div>
+          {node.content && <div style={{ color: T.muted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{node.content}</div>}
+          <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 5 }}>
+            {node.delay > 0 && <span style={{ color: T.faint, fontSize: 11 }}>Day {node.delay}</span>}
+            <span style={{ background: nc.bg, color: nc.iconBg, fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 3 }}>⏱ Smart timing</span>
           </div>
         </div>
       </div>
@@ -4747,18 +4592,12 @@ function FlowNode({ node, depth = 0, onEdit, selected, onSelect, showStats, onDe
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
         {depth > 0 && <div style={{ width: 2, height: 20, background: T.border }} />}
         {/* A/B split node */}
-        <div style={{ position: "relative", minWidth: 280 }}>
-          {onDelete && (
-            <button onClick={e => { e.stopPropagation(); onDelete(node.id); }} title="Delete A/B test (and both branches)"
-              style={{ position: "absolute", top: -8, right: -8, width: 22, height: 22, borderRadius: "50%", background: T.card, border: `1px solid ${T.border}`, color: T.muted, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2, lineHeight: 1 }}>×</button>
-          )}
-          <div onClick={() => { onSelect(node.id); onEdit(node); }} style={{ background: isSelected ? "rgba(188,140,255,0.18)" : "rgba(188,140,255,0.10)", border: `1.5px solid ${T.purple}`, borderRadius: 10, padding: "0.75rem 1.5rem", cursor: "pointer", textAlign: "center", transition: "all 0.15s" }}>
-            <div style={{ color: T.purple, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>A/B Test</div>
-            <div style={{ color: T.text, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{node.label}</div>
-            <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-              <span style={{ background: T.blue + "22", color: T.blue, fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 4 }}>A · {node.splitPct}%</span>
-              <span style={{ background: T.purple + "22", color: T.purple, fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 4 }}>B · {100 - node.splitPct}%</span>
-            </div>
+        <div onClick={() => { onSelect(node.id); onEdit(node); }} style={{ background: isSelected ? "rgba(188,140,255,0.18)" : "rgba(188,140,255,0.10)", border: `1.5px solid ${T.purple}`, borderRadius: 10, padding: "0.75rem 1.5rem", cursor: "pointer", minWidth: 280, textAlign: "center", transition: "all 0.15s" }}>
+          <div style={{ color: T.purple, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>A/B Test</div>
+          <div style={{ color: T.text, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{node.label}</div>
+          <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+            <span style={{ background: T.blue + "22", color: T.blue, fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 4 }}>A · {node.splitPct}%</span>
+            <span style={{ background: T.purple + "22", color: T.purple, fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 4 }}>B · {100 - node.splitPct}%</span>
           </div>
         </div>
 
@@ -4771,7 +4610,7 @@ function FlowNode({ node, depth = 0, onEdit, selected, onSelect, showStats, onDe
               <div style={{ background: T.blue + "22", border: `1px solid ${T.blue}44`, borderRadius: 5, padding: "2px 10px", color: T.blue, fontSize: 11, fontWeight: 700 }}>Variant A</div>
               {showStats && s && <div style={{ background: winner === "a" ? T.accentBg : T.faint + "44", color: winner === "a" ? T.accent : T.muted, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4 }}>{aRR}% reply {winner === "a" ? "🏆" : ""}</div>}
             </div>
-            {(node.a || []).map(n => <FlowNode key={n.id} node={n} depth={depth + 1} onEdit={onEdit} selected={selected} onSelect={onSelect} showStats={showStats} onDelete={onDelete} />)}
+            {(node.a || []).map(n => <FlowNode key={n.id} node={n} depth={depth + 1} onEdit={onEdit} selected={selected} onSelect={onSelect} showStats={showStats} />)}
           </div>
           {/* B branch */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 320 }}>
@@ -4780,7 +4619,7 @@ function FlowNode({ node, depth = 0, onEdit, selected, onSelect, showStats, onDe
               <div style={{ background: T.purple + "22", border: `1px solid ${T.purple}44`, borderRadius: 5, padding: "2px 10px", color: T.purple, fontSize: 11, fontWeight: 700 }}>Variant B</div>
               {showStats && s && <div style={{ background: winner === "b" ? T.accentBg : T.faint + "44", color: winner === "b" ? T.accent : T.muted, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4 }}>{bRR}% reply {winner === "b" ? "🏆" : ""}</div>}
             </div>
-            {(node.b || []).map(n => <FlowNode key={n.id} node={n} depth={depth + 1} onEdit={onEdit} selected={selected} onSelect={onSelect} showStats={showStats} onDelete={onDelete} />)}
+            {(node.b || []).map(n => <FlowNode key={n.id} node={n} depth={depth + 1} onEdit={onEdit} selected={selected} onSelect={onSelect} showStats={showStats} />)}
           </div>
         </div>
       </div>
@@ -4792,27 +4631,21 @@ function FlowNode({ node, depth = 0, onEdit, selected, onSelect, showStats, onDe
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
         {depth > 0 && <div style={{ width: 2, height: 20, background: T.border }} />}
-        <div style={{ position: "relative", minWidth: 240 }}>
-          {onDelete && (
-            <button onClick={e => { e.stopPropagation(); onDelete(node.id); }} title="Delete condition (and both branches)"
-              style={{ position: "absolute", top: -8, right: -8, width: 22, height: 22, borderRadius: "50%", background: T.card, border: `1px solid ${T.border}`, color: T.muted, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2, lineHeight: 1 }}>×</button>
-          )}
-          <div onClick={() => { onSelect(node.id); onEdit(node); }} style={{ background: isSelected ? "rgba(210,153,34,0.18)" : "rgba(210,153,34,0.08)", border: `1.5px solid ${T.yellow}`, borderRadius: 10, padding: "0.75rem 1.25rem", cursor: "pointer", textAlign: "center", transition: "all 0.15s" }}>
-            <div style={{ color: T.yellow, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Check condition</div>
-            <div style={{ color: T.text, fontSize: 13, fontWeight: 600 }}>{trigger?.label || node.trigger}</div>
-            {node.delayDays > 0 && <div style={{ color: T.muted, fontSize: 11, marginTop: 3 }}>Wait {node.delayDays} day{node.delayDays !== 1 ? "s" : ""}</div>}
-          </div>
+        <div onClick={() => { onSelect(node.id); onEdit(node); }} style={{ background: isSelected ? "rgba(210,153,34,0.18)" : "rgba(210,153,34,0.08)", border: `1.5px solid ${T.yellow}`, borderRadius: 10, padding: "0.75rem 1.25rem", cursor: "pointer", minWidth: 240, textAlign: "center", transition: "all 0.15s" }}>
+          <div style={{ color: T.yellow, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Check condition</div>
+          <div style={{ color: T.text, fontSize: 13, fontWeight: 600 }}>{trigger?.label || node.trigger}</div>
+          {node.delayDays > 0 && <div style={{ color: T.muted, fontSize: 11, marginTop: 3 }}>Wait {node.delayDays} day{node.delayDays !== 1 ? "s" : ""}</div>}
         </div>
         <div style={{ display: "flex", gap: 32, marginTop: 0 }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 300 }}>
             <div style={{ width: 2, height: 20, background: T.accent }} />
             <div style={{ background: T.accentBg, border: `1px solid ${T.accent}44`, borderRadius: 5, padding: "2px 10px", color: T.accent, fontSize: 11, fontWeight: 700 }}>✓ Yes</div>
-            {(node.yes || []).map(n => <FlowNode key={n.id} node={n} depth={depth + 1} onEdit={onEdit} selected={selected} onSelect={onSelect} showStats={showStats} onDelete={onDelete} />)}
+            {(node.yes || []).map(n => <FlowNode key={n.id} node={n} depth={depth + 1} onEdit={onEdit} selected={selected} onSelect={onSelect} showStats={showStats} />)}
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 200 }}>
             <div style={{ width: 2, height: 20, background: T.yellow }} />
             <div style={{ background: T.yellow + "22", border: `1px solid ${T.yellow}44`, borderRadius: 5, padding: "2px 10px", color: T.yellow, fontSize: 11, fontWeight: 700 }}>✗ No</div>
-            {(node.no || []).map(n => <FlowNode key={n.id} node={n} depth={depth + 1} onEdit={onEdit} selected={selected} onSelect={onSelect} showStats={showStats} onDelete={onDelete} />)}
+            {(node.no || []).map(n => <FlowNode key={n.id} node={n} depth={depth + 1} onEdit={onEdit} selected={selected} onSelect={onSelect} showStats={showStats} />)}
           </div>
         </div>
       </div>
@@ -4822,7 +4655,7 @@ function FlowNode({ node, depth = 0, onEdit, selected, onSelect, showStats, onDe
 }
 
 function FlowBuilder({ campaign, onClose, savedFlow, onSave, voiceProfile = DEFAULT_VOICE_PROFILE }) {
-  const [flow, setFlow] = useState(() => (Array.isArray(savedFlow) ? savedFlow : (Array.isArray(campaign?.flow) ? campaign.flow : [])));
+  const [flow, setFlow] = useState(() => savedFlow || DEFAULT_FLOW);
   const [editNode, setEditNode] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [saved, setSaved] = useState(false);
@@ -4836,25 +4669,6 @@ function FlowBuilder({ campaign, onClose, savedFlow, onSave, voiceProfile = DEFA
       if (n.a)   return { ...n, a: updateNode(id, updates, n.a), b: updateNode(id, updates, n.b) };
       return n;
     });
-
-  // Removes a node by id from anywhere in the tree — top-level array, or
-  // nested inside a condition's yes/no branch or an A/B split's a/b branch.
-  // "end" nodes can't be deleted directly since every branch needs one to
-  // terminate cleanly — delete the step before it instead.
-  const deleteNodeFromTree = (id, nodes) =>
-    nodes
-      .filter(n => n.id !== id)
-      .map(n => {
-        if (n.yes) return { ...n, yes: deleteNodeFromTree(id, n.yes), no: deleteNodeFromTree(id, n.no) };
-        if (n.a)   return { ...n, a: deleteNodeFromTree(id, n.a), b: deleteNodeFromTree(id, n.b) };
-        return n;
-      });
-
-  const deleteNode = (id) => {
-    setFlow(f => deleteNodeFromTree(id, f));
-    if (editNode?.id === id) setEditNode(null);
-    if (selectedId === id) setSelectedId(null);
-  };
 
   const addNode = (type) => {
     const id = nextId();
@@ -4986,19 +4800,15 @@ Every branch (yes/no, a/b) must end with an "end" node. ids must be unique integ
 
   const inp = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, color: T.text, padding: "9px 12px", fontSize: 13, outline: "none", fontFamily: "inherit", width: "100%", boxSizing: "border-box" };
 
-  // Guard against corrupted/non-array flow data (e.g. from a past save bug)
-  // crashing the whole Flow Builder — fall back to an empty flow instead.
-  const safeFlow = Array.isArray(flow) ? flow : [];
-
-  const flowStr = JSON.stringify(safeFlow);
+  const flowStr = JSON.stringify(flow);
   const msgCount  = (flowStr.match(/"type":"message"/g) || []).length;
   const condCount = (flowStr.match(/"type":"condition"/g) || []).length;
   const abCount   = (flowStr.match(/"type":"ab_split"/g) || []).length;
 
   // Extract A/B nodes for results tab
   const abNodes = [];
-  const extractAB = nodes => (nodes || []).forEach(n => { if (n.type === "ab_split") abNodes.push(n); if (n.yes) extractAB(n.yes); if (n.no) extractAB(n.no); if (n.a) { extractAB(n.a); extractAB(n.b); } });
-  extractAB(safeFlow);
+  const extractAB = nodes => nodes.forEach(n => { if (n.type === "ab_split") abNodes.push(n); if (n.yes) extractAB(n.yes); if (n.no) extractAB(n.no); if (n.a) { extractAB(n.a); extractAB(n.b); } });
+  extractAB(flow);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: T.bg, zIndex: 300, display: "flex", flexDirection: "column", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
@@ -5073,20 +4883,7 @@ Every branch (yes/no, a/b) must end with an "end" node. ids must be unique integ
           <div style={{ flex: 1, overflowY: "auto", overflowX: "auto", padding: "2rem", display: "flex", justifyContent: "center" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 900 }}>
               <div style={{ background: T.accentBg, border: `1.5px solid ${T.accent}`, borderRadius: 100, padding: "6px 20px", color: T.accent, fontSize: 12, fontWeight: 700, letterSpacing: "0.05em" }}>▶ START</div>
-              {flow.length === 0 ? (
-                <div style={{ marginTop: 40, textAlign: "center", maxWidth: 420 }}>
-                  <div style={{ color: T.text, fontSize: 15, fontWeight: 700, marginBottom: 8 }}>This sequence is empty</div>
-                  <div style={{ color: T.muted, fontSize: 13, lineHeight: 1.6, marginBottom: "1.5rem" }}>
-                    Add steps using the buttons above, describe it to <strong style={{ color: T.text }}>Build with AI</strong>, or start from a template with a connection request, follow-up, and reply-tracking already set up.
-                  </div>
-                  <button onClick={() => setFlow(DEFAULT_FLOW)}
-                    style={{ background: T.card, color: T.text, border: `1px solid ${T.border}`, borderRadius: 8, padding: "9px 18px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-                    Start from template
-                  </button>
-                </div>
-              ) : (
-                flow.map(node => <FlowNode key={node.id} node={node} depth={0} onEdit={setEditNode} selected={selectedId} onSelect={setSelectedId} showStats={false} onDelete={deleteNode} />)
-              )}
+              {flow.map(node => <FlowNode key={node.id} node={node} depth={0} onEdit={setEditNode} selected={selectedId} onSelect={setSelectedId} showStats={false} />)}
             </div>
           </div>
 
@@ -6154,8 +5951,6 @@ export default function App() {
   const [view, setView] = useState("dashboard");
   const [onboarding, setOnboarding] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [pendingTemplate, setPendingTemplate] = useState(null);
-  const [launchingFlow, setLaunchingFlow] = useState(false);
   const [flowCampaign, setFlowCampaign] = useState(null);
   const [showNewCampaign, setShowNewCampaign] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -6188,7 +5983,7 @@ export default function App() {
   const { clients, campaigns, leads, activity, brand, voiceProfile,
           addClient, updateClient, deleteClient,
           addCampaign, deleteCampaign, toggleCampaign, toggleReviewMode,
-          setLeads, updateLeadsBulk, saveFlow: dbSaveFlow, logActivity, saveBrand, saveVoiceProfile, refetch } = db;
+          setLeads, saveFlow: dbSaveFlow, logActivity, saveBrand, saveVoiceProfile, refetch } = db;
 
   CLIENTS = clients; CAMPAIGNS = campaigns; LEADS = leads;
 
@@ -6220,7 +6015,7 @@ export default function App() {
         campaign={flowCampaign}
         onClose={() => setFlowCampaign(null)}
         savedFlow={flows[flowCampaign?.id]}
-        onSave={(campaignId, flow) => { saveFlow(campaignId, flow); setFlowCampaign(null); }}
+        onSave={(flow) => { saveFlow(flowCampaign.id, flow); setFlowCampaign(null); }}
         voiceProfile={voiceProfile}
       />
     </div>
@@ -6236,21 +6031,8 @@ export default function App() {
     <div style={{ display: "flex", minHeight: "100vh", background: T.bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
 
       {/* ── Global overlays ── */}
-      {showTemplates   && <TemplatesModal   onClose={() => setShowTemplates(false)} onUse={(t) => { setPendingTemplate(t); setShowTemplates(false); setShowNewCampaign(true); }} />}
-      {showNewCampaign && <NewCampaignModal onClose={() => { setShowNewCampaign(false); setPendingTemplate(null); }} clients={clients} initialFlow={pendingTemplate ? TEMPLATE_FLOWS[pendingTemplate.id] : null} templateName={pendingTemplate?.name || null} launching={launchingFlow} onLaunchFlow={async c => {
-        setLaunchingFlow(true);
-        try {
-          const created = await addCampaign(c);
-          if (created?.id) {
-            setShowNewCampaign(false); setPendingTemplate(null);
-            setFlowCampaign(created);
-          }
-        } catch (e) {
-          console.error("Failed to create campaign:", e);
-        } finally {
-          setLaunchingFlow(false);
-        }
-      }} />}
+      {showTemplates   && <TemplatesModal   onClose={() => setShowTemplates(false)} onUse={(t) => { setShowTemplates(false); setShowNewCampaign(true); }} />}
+      {showNewCampaign && <NewCampaignModal onClose={() => setShowNewCampaign(false)} clients={clients} onLaunchFlow={c => { addCampaign(c); setShowNewCampaign(false); setFlowCampaign(c); }} />}
       {showSearch      && <GlobalSearch     onClose={() => setShowSearch(false)} onNavigate={v => setView(v)} />}
       {editingClient   && <EditClientModal  client={editingClient} onClose={() => setEditingClient(null)} onSave={c => { updateClient(c); setEditingClient(null); logActivity("client", `ICP updated for ${c.name}`); pushToast(`${c.name} updated`, "success"); }} />}
 
@@ -6282,11 +6064,11 @@ export default function App() {
 
         {view === "inbox"      && <Inbox leads={leads} setLeads={setLeads} logActivity={logActivity} voiceProfile={voiceProfile} />}
         {view === "pipeline"   && <div style={{ padding: "2rem 2.25rem" }}><Pipeline leads={leads} setLeads={setLeads} logActivity={logActivity} /></div>}
-        {view === "campaigns"  && <Campaigns onNew={() => setShowNewCampaign(true)} onTemplates={() => setShowTemplates(true)} onEditFlow={c => setFlowCampaign(c)} campaigns={campaigns} clients={clients} leads={leads} onDeleteCampaign={deleteCampaign} onToggleCampaign={toggleCampaign} onToggleReviewMode={toggleReviewModeWrapped} />}
+        {view === "campaigns"  && <Campaigns onNew={() => setShowNewCampaign(true)} onTemplates={() => setShowTemplates(true)} onEditFlow={c => setFlowCampaign(c)} campaigns={campaigns} clients={clients} onDeleteCampaign={deleteCampaign} onToggleCampaign={toggleCampaign} onToggleReviewMode={toggleReviewModeWrapped} />}
         {view === "queue" && <ReviewQueue campaigns={campaigns} onToggleReviewMode={toggleReviewModeWrapped} logActivity={logActivity} agencyId={agencyId} />}
 
         {/* 4. Skeleton loaders in Leads */}
-        {view === "leads"      && <Leads leads={leads} setLeads={setLeads} updateLeadsBulk={updateLeadsBulk} logActivity={logActivity} loading={db.loading} clients={clients} campaigns={campaigns} />}
+        {view === "leads"      && <Leads leads={leads} setLeads={setLeads} logActivity={logActivity} loading={db.loading} clients={clients} />}
 
         {view === "triggers"   && <TriggerMonitor leads={leads} setLeads={setLeads} logActivity={logActivity} />}
         {view === "analytics"  && <Analytics />}
