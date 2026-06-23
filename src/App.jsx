@@ -1789,7 +1789,7 @@ function ImportModal({ onClose, onImport, clients = [] }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: "1rem" }}>
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, width: "100%", maxWidth: stage === "preview" ? 680 : 520, maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, width: "100%", maxWidth: stage === "preview" || (tab === "search" && searchResults.length > 0) ? 680 : 520, maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
         {/* Modal header */}
         <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
@@ -1900,7 +1900,7 @@ function ImportModal({ onClose, onImport, clients = [] }) {
                   </div>
 
                   {/* Results list */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 340, overflowY: "auto", marginBottom: "1rem" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 480, overflowY: "auto", marginBottom: "1rem" }}>
                     {searchResults.map((r, i) => {
                       const sel = searchSelected.has(r.linkedin_urn);
                       const scoreData = searchScores[r.linkedin_urn];
