@@ -328,6 +328,7 @@ export function useSupabaseData(agencyId) {
         throw error;
       }
       if (data) {
+<<<<<<< HEAD
         const newCampaign = {
           ...campaign,
           id: data.id,
@@ -342,6 +343,22 @@ export function useSupabaseData(agencyId) {
         return newCampaign;
       }
       return null;
+=======
+        setCampaignsState((cs) => [
+          ...cs,
+          {
+            ...campaign,
+            id: data.id,
+            status: "active",
+            leads: 0,
+            sent: 0,
+            replies: 0,
+            meetings: 0,
+          },
+        ]);
+        logActivity("campaign", `Campaign created: ${campaign.name}`);
+      }
+>>>>>>> origin/main
     },
     [agencyId, logActivity],
   );

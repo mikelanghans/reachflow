@@ -3533,6 +3533,7 @@ const TEMPLATES = [
       { day: 5, type: "✦ AI Conversation",       msg: "Once connected, AI manages the conversation — responding to replies, handling objections, and steering toward a booked call at the right moment.", why: "The AI knows the full context: what you commented on, their ICP, past replies. It paces the conversation to feel natural rather than rushing to the pitch." },
     ],
   },
+<<<<<<< HEAD
   {
     id: 6, name: "Coach Client Outreach", tag: "For coaches", tagCol: T.green,
     desc: "Built for coaches and consultants filling 1:1 or group programs. Warms up the prospect with genuine engagement before connecting, then has a built-in fallback path if the connection request goes unanswered.",
@@ -3625,6 +3626,10 @@ const TEMPLATE_FLOWS = {
   ],
 };
 
+=======
+];
+
+>>>>>>> origin/main
 function TemplatesModal({ onClose, onUse }) {
   const [open, setOpen] = useState(null);
   return (
@@ -3692,9 +3697,15 @@ function TemplatesModal({ onClose, onUse }) {
 }
 
 // ─── NEW CAMPAIGN MODAL ──────────────────────────────────────────────────────
+<<<<<<< HEAD
 function NewCampaignModal({ onClose, onLaunchFlow, clients = DEFAULT_CLIENTS, initialFlow = null, templateName = null, launching = false }) {
   const [step, setStep] = useState(0); // 0=details, 1=ready
   const [name, setCampaignName] = useState(templateName ? `${templateName} Campaign` : "");
+=======
+function NewCampaignModal({ onClose, onLaunchFlow, clients = DEFAULT_CLIENTS }) {
+  const [step, setStep] = useState(0); // 0=details, 1=ready
+  const [name, setCampaignName] = useState("");
+>>>>>>> origin/main
   const [client, setClient] = useState("");
   const [channel, setChannel] = useState("linkedin");
 
@@ -3706,7 +3717,11 @@ function NewCampaignModal({ onClose, onLaunchFlow, clients = DEFAULT_CLIENTS, in
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, width: "100%", maxWidth: 480, overflow: "hidden" }}>
         <div style={{ padding: "1.25rem 1.5rem", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ color: T.text, fontSize: 16, fontWeight: 700 }}>New campaign</div>
+<<<<<<< HEAD
           <button onClick={launching ? undefined : onClose} disabled={launching} style={{ background: "transparent", border: "none", color: launching ? T.faint : T.muted, cursor: launching ? "default" : "pointer", fontSize: 20 }}>×</button>
+=======
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", fontSize: 20 }}>×</button>
+>>>>>>> origin/main
         </div>
 
         <div style={{ padding: "1.5rem" }}>
@@ -3715,11 +3730,14 @@ function NewCampaignModal({ onClose, onLaunchFlow, clients = DEFAULT_CLIENTS, in
               <div style={{ color: T.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Campaign name</div>
               <input style={inp} placeholder="e.g. Q3 SaaS Outreach" value={name} onChange={e => setCampaignName(e.target.value)} autoFocus />
             </div>
+<<<<<<< HEAD
             {templateName && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, background: T.accentBg, border: `1px solid ${T.accent}`, borderRadius: 8, padding: "8px 10px", marginBottom: 14, fontSize: 12, color: T.accent }}>
                 <span>⑃</span> Starting from the <strong>{templateName}</strong> template — steps will be pre-loaded in the Flow Builder.
               </div>
             )}
+=======
+>>>>>>> origin/main
             <div style={{ marginBottom: 14 }}>
               <div style={{ color: T.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Client</div>
               <select style={{ ...inp, cursor: "pointer" }} value={client} onChange={e => setClient(e.target.value)}>
@@ -3747,9 +3765,15 @@ function NewCampaignModal({ onClose, onLaunchFlow, clients = DEFAULT_CLIENTS, in
               <div style={{ color: T.text, fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{name}</div>
               <div style={{ color: T.muted, fontSize: 13, marginBottom: "1.5rem" }}>{clients.find(c => c.id === client)?.name || client} · {channel === "both" ? "LinkedIn + Email" : channel === "linkedin" ? "LinkedIn" : "Email"}</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+<<<<<<< HEAD
                 <button onClick={() => onLaunchFlow({ name, client_id: client, channel, flow: initialFlow || [] })} disabled={launching} style={{ background: launching ? T.faint : T.accent, color: launching ? T.muted : "#0d1117", border: "none", borderRadius: 10, padding: "12px", cursor: launching ? "default" : "pointer", fontSize: 14, fontWeight: 700 }}>{launching ? "Creating campaign…" : "Build flow in Flow Builder →"}</button>
                 <button onClick={() => { onClose(); }} disabled={launching} style={{ background: T.card, color: launching ? T.faint : T.text, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px", cursor: launching ? "default" : "pointer", fontSize: 13 }}>Start from a template instead</button>
                 <button onClick={onClose} disabled={launching} style={{ background: "transparent", color: T.muted, border: "none", cursor: launching ? "default" : "pointer", fontSize: 12, padding: "6px" }}>Save as draft — build sequence later</button>
+=======
+                <button onClick={() => { onLaunchFlow({ name, client_id: client, channel }); onClose(); }} style={{ background: T.accent, color: "#0d1117", border: "none", borderRadius: 10, padding: "12px", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>Build flow in Flow Builder →</button>
+                <button onClick={() => { onClose(); }} style={{ background: T.card, color: T.text, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px", cursor: "pointer", fontSize: 13 }}>Start from a template instead</button>
+                <button onClick={onClose} style={{ background: "transparent", color: T.muted, border: "none", cursor: "pointer", fontSize: 12, padding: "6px" }}>Save as draft — build sequence later</button>
+>>>>>>> origin/main
               </div>
             </div>
           </>)}
@@ -4822,7 +4846,11 @@ function FlowNode({ node, depth = 0, onEdit, selected, onSelect, showStats, onDe
 }
 
 function FlowBuilder({ campaign, onClose, savedFlow, onSave, voiceProfile = DEFAULT_VOICE_PROFILE }) {
+<<<<<<< HEAD
   const [flow, setFlow] = useState(() => (Array.isArray(savedFlow) ? savedFlow : (Array.isArray(campaign?.flow) ? campaign.flow : [])));
+=======
+  const [flow, setFlow] = useState(() => (Array.isArray(savedFlow) ? savedFlow : []));
+>>>>>>> origin/main
   const [editNode, setEditNode] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [saved, setSaved] = useState(false);
@@ -6154,8 +6182,11 @@ export default function App() {
   const [view, setView] = useState("dashboard");
   const [onboarding, setOnboarding] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+<<<<<<< HEAD
   const [pendingTemplate, setPendingTemplate] = useState(null);
   const [launchingFlow, setLaunchingFlow] = useState(false);
+=======
+>>>>>>> origin/main
   const [flowCampaign, setFlowCampaign] = useState(null);
   const [showNewCampaign, setShowNewCampaign] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -6236,6 +6267,7 @@ export default function App() {
     <div style={{ display: "flex", minHeight: "100vh", background: T.bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
 
       {/* ── Global overlays ── */}
+<<<<<<< HEAD
       {showTemplates   && <TemplatesModal   onClose={() => setShowTemplates(false)} onUse={(t) => { setPendingTemplate(t); setShowTemplates(false); setShowNewCampaign(true); }} />}
       {showNewCampaign && <NewCampaignModal onClose={() => { setShowNewCampaign(false); setPendingTemplate(null); }} clients={clients} initialFlow={pendingTemplate ? TEMPLATE_FLOWS[pendingTemplate.id] : null} templateName={pendingTemplate?.name || null} launching={launchingFlow} onLaunchFlow={async c => {
         setLaunchingFlow(true);
@@ -6251,6 +6283,10 @@ export default function App() {
           setLaunchingFlow(false);
         }
       }} />}
+=======
+      {showTemplates   && <TemplatesModal   onClose={() => setShowTemplates(false)} onUse={(t) => { setShowTemplates(false); setShowNewCampaign(true); }} />}
+      {showNewCampaign && <NewCampaignModal onClose={() => setShowNewCampaign(false)} clients={clients} onLaunchFlow={c => { addCampaign(c); setShowNewCampaign(false); setFlowCampaign(c); }} />}
+>>>>>>> origin/main
       {showSearch      && <GlobalSearch     onClose={() => setShowSearch(false)} onNavigate={v => setView(v)} />}
       {editingClient   && <EditClientModal  client={editingClient} onClose={() => setEditingClient(null)} onSave={c => { updateClient(c); setEditingClient(null); logActivity("client", `ICP updated for ${c.name}`); pushToast(`${c.name} updated`, "success"); }} />}
 
