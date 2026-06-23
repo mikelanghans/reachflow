@@ -86,7 +86,23 @@ export default async function handler(req, res) {
       body:    JSON.stringify(searchBody),
     })
 
-    const data = await response.json()
+    // Read as text first — Unipile (or a proxy/gateway in front of it) can
+    // return a non-JSON body on outages, timeouts, or auth failures (an HTML
+    // error page, an empty body, etc.). Calling response.json() directly on
+    // that would throw an opaque "Unexpected token '<'" with no indication
+    // of what actually went wrong, so we parse defensively and surface the
+    // raw body (truncated) when it isn't JSON.
+    const rawText = await response.text()
+    let data
+    try {
+      data = JSON.parse(rawText)
+    } catch {
+      console.error('Unipile search returned non-JSON response:', response.status, rawText.slice(0, 500))
+      return res.status(502).json({
+        error: `Unipile returned an unexpected response (HTTP ${response.status}) — likely an account/session issue or a Unipile-side outage, not a problem with the search itself.`,
+        details: rawText.slice(0, 300),
+      })
+    }
 
     if (!response.ok) {
       console.error('Unipile search error:', data)

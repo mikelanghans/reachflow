@@ -31,12 +31,20 @@ export default async function handler(req, res) {
       { headers: { "X-API-KEY": apiKey } },
     );
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      return res.status(200).json({ ok: false, error: err.message || `Profile lookup failed (${response.status})` });
+    const rawText = await response.text();
+    let body;
+    try {
+      body = JSON.parse(rawText);
+    } catch {
+      console.error("Unipile profile lookup returned non-JSON response:", response.status, rawText.slice(0, 500));
+      return res.status(200).json({ ok: false, error: `Unipile returned an unexpected response (HTTP ${response.status}) — likely an account/session issue or an outage, not a problem with this specific profile.` });
     }
 
-    const profile = await response.json();
+    if (!response.ok) {
+      return res.status(200).json({ ok: false, error: body.message || `Profile lookup failed (${response.status})` });
+    }
+
+    const profile = body;
     const name = profile.display_name || [profile.first_name, profile.last_name].filter(Boolean).join(" ") || null;
 
     return res.status(200).json({

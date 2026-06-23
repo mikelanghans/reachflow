@@ -42,14 +42,24 @@ export default async function handler(req, res) {
         { headers: { 'X-API-KEY': apiKey } }
       )
 
-      if (!response.ok) {
+      const rawText = await response.text()
+      let body
+      try {
+        body = JSON.parse(rawText)
+      } catch {
+        console.error('Unipile enrich returned non-JSON response:', response.status, rawText.slice(0, 500))
         results.failed++
-        const err = await response.json()
-        results.errors.push({ id: lead.id, error: err.message || 'Profile lookup failed' })
+        results.errors.push({ id: lead.id, error: `Unipile returned an unexpected response (HTTP ${response.status})` })
         continue
       }
 
-      const profile = await response.json()
+      if (!response.ok) {
+        results.failed++
+        results.errors.push({ id: lead.id, error: body.message || 'Profile lookup failed' })
+        continue
+      }
+
+      const profile = body
 
       // Update the lead with real data from LinkedIn
       await supabase.from('leads').update({
