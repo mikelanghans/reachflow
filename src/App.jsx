@@ -1556,6 +1556,7 @@ function ImportModal({ onClose, onImport, clients = [] }) {
   const [csvError, setCsvError] = useState(null);
   const csvInputRef = useRef(null);
   const [listName, setListName] = useState("");
+  const [importing, setImporting] = useState(false);
 
   // Native search state
   const connectedClients = clients.filter(c => c.linkedinConnected && c.unipileAccountId);
@@ -2098,6 +2099,8 @@ function ImportModal({ onClose, onImport, clients = [] }) {
             )}
             {stage === "preview" && (
               <button onClick={() => {
+                if (importing) return; // guards against a fast double-click firing this twice before the modal unmounts, which previously caused duplicate leads in Supabase
+                setImporting(true);
                 const selectedRows = rows.filter(r => r.selected && r.ok !== false);
                 const newLeads = selectedRows.map((r, i) => ({
                   id: Date.now() + i,
@@ -2113,7 +2116,7 @@ function ImportModal({ onClose, onImport, clients = [] }) {
                   linkedin_urn: r.linkedin_urn || null,
                 }));
                 onImport(newLeads, listName || "New List"); onClose();
-              }} style={{ background: T.accent, color: "#0d1117", border: "none", borderRadius: 7, padding: "8px 18px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Import {selectedCount} leads →</button>
+              }} disabled={importing} style={{ background: importing ? T.faint : T.accent, color: importing ? T.muted : "#0d1117", border: "none", borderRadius: 7, padding: "8px 18px", cursor: importing ? "default" : "pointer", fontSize: 13, fontWeight: 700 }}>{importing ? "Importing…" : `Import ${selectedCount} leads →`}</button>
             )}
           </div>
         </div>
@@ -2256,7 +2259,7 @@ function BookmarkletSetup({ onDismiss }) {
 }
 
 // ─── LEADS VIEW ───────────────────────────────────────────────────────────────
-function Leads({ leads, setLeads, updateLeadsBulk, logActivity, clients = [], campaigns = [] }) {
+function Leads({ leads, setLeads, updateLeadsBulk, deleteLeadsBulk, logActivity, clients = [], campaigns = [] }) {
   const [filter, setFilter]         = useState("all");
   const [scoreFilter, setScoreFilter] = useState("all");
   const [showImport, setShowImport] = useState(false);
@@ -2322,7 +2325,17 @@ function Leads({ leads, setLeads, updateLeadsBulk, logActivity, clients = [], ca
   const toggleAll    = () => setSelected(s => s.size === filtered.length ? new Set() : new Set(filtered.map(l => l.id)));
   const clearSel     = () => setSelected(new Set());
 
-  const bulkDelete   = () => { if (window.confirm(`Delete ${selected.size} lead${selected.size > 1 ? "s" : ""}?`)) { setLeads(ls => ls.filter(l => !selected.has(l.id))); clearSel(); } };
+  const bulkDelete   = () => {
+    if (!window.confirm(`Delete ${selected.size} lead${selected.size > 1 ? "s" : ""}?`)) return;
+    const ids = [...selected];
+    clearSel();
+    if (deleteLeadsBulk) {
+      deleteLeadsBulk(ids).catch(err => { console.error("Delete failed:", err); window.alert("Couldn't delete — check the console for details."); });
+    } else {
+      // Fallback so the UI doesn't silently no-op if this prop is ever missing
+      setLeads(ls => ls.filter(l => !ids.includes(l.id)));
+    }
+  };
   const bulkStatus   = async (status) => {
     const ids = [...selected];
     setLeads(ls => ls.map(l => selected.has(l.id) ? { ...l, status } : l)); // optimistic
@@ -6325,7 +6338,7 @@ export default function App() {
   const { clients, campaigns, leads, activity, brand, voiceProfile,
           addClient, updateClient, deleteClient,
           addCampaign, deleteCampaign, toggleCampaign, toggleReviewMode,
-          setLeads, updateLeadsBulk, saveFlow: dbSaveFlow, logActivity, saveBrand, saveVoiceProfile, refetch } = db;
+          setLeads, updateLeadsBulk, deleteLeadsBulk, saveFlow: dbSaveFlow, logActivity, saveBrand, saveVoiceProfile, refetch } = db;
 
   CLIENTS = clients; CAMPAIGNS = campaigns; LEADS = leads;
 
@@ -6423,7 +6436,7 @@ export default function App() {
         {view === "queue" && <ReviewQueue campaigns={campaigns} onToggleReviewMode={toggleReviewModeWrapped} logActivity={logActivity} agencyId={agencyId} />}
 
         {/* 4. Skeleton loaders in Leads */}
-        {view === "leads"      && <Leads leads={leads} setLeads={setLeads} updateLeadsBulk={updateLeadsBulk} logActivity={logActivity} loading={db.loading} clients={clients} campaigns={campaigns} />}
+        {view === "leads"      && <Leads leads={leads} setLeads={setLeads} updateLeadsBulk={updateLeadsBulk} deleteLeadsBulk={deleteLeadsBulk} logActivity={logActivity} loading={db.loading} clients={clients} campaigns={campaigns} />}
 
         {view === "triggers"   && <TriggerMonitor leads={leads} setLeads={setLeads} logActivity={logActivity} />}
         {view === "analytics"  && <Analytics />}

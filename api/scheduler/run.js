@@ -579,34 +579,50 @@ async function sendViaUnipile({ accountId, lead, message, type }) {
   }
 
   try {
-    const endpoint =
-      type === "connection_request"
-        ? "https://api49.unipile.com:17927/api/v1/linkedin/invitations"
-        : type === "inmail"
-          ? "https://api49.unipile.com:17927/api/v1/linkedin/messages?inmail=true"
-          : "https://api49.unipile.com:17927/api/v1/linkedin/messages";
+    let response;
 
-    const body =
-      type === "connection_request"
-        ? {
-            account_id: accountId,
-            linkedin_member_urn: lead.linkedin_urn,
-            message,
-          }
-        : {
-            account_id: accountId,
-            recipient_urn: lead.linkedin_urn,
-            text: message,
-          };
-
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    if (type === "connection_request") {
+      // Confirmed against https://developer.unipile.com/reference/userscontroller_adduserbyidentifier —
+      // POST /users/invite with provider_id/account_id/message in JSON.
+      // The old code posted to /api/v1/linkedin/invitations, which doesn't
+      // exist (confirmed 404 in production logs).
+      response = await fetch("https://api49.unipile.com:17927/api/v1/users/invite", {
+        method: "POST",
+        headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider_id: lead.linkedin_urn,
+          account_id: accountId,
+          message: message?.slice(0, 300) || undefined,
+        }),
+      });
+    } else {
+      // Confirmed against https://developer.unipile.com/docs/send-messages —
+      // regular messages and InMail both go through POST /chats, and every
+      // documented example (including the Node SDK internally) uses
+      // multipart/form-data — there's no JSON variant shown anywhere for
+      // this endpoint. The old code posted JSON to a nonexistent
+      // /api/v1/linkedin/messages path.
+      const form = new FormData();
+      form.append("account_id", accountId);
+      form.append("text", message || "");
+      form.append("attendees_ids", lead.linkedin_urn);
+      if (type === "inmail") {
+        form.append("linkedin[api]", "classic");
+        form.append("linkedin[inmail]", "true");
+      }
+      // Do NOT set Content-Type manually — fetch sets the correct
+      // multipart boundary automatically when given a FormData body.
+      response = await fetch("https://api49.unipile.com:17927/api/v1/chats", {
+        method: "POST",
+        headers: { "X-API-KEY": apiKey },
+        body: form,
+      });
+    }
 
     if (!response.ok) {
-      const err = await response.json();
+      const rawErr = await response.text().catch(() => "");
+      let err = {};
+      try { err = JSON.parse(rawErr); } catch { err = { message: rawErr.slice(0, 300) }; }
       console.error("Unipile send error:", err);
       return false;
     }
