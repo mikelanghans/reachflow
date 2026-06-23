@@ -734,28 +734,46 @@ async function performSocialAction({ accountId, lead, node }) {
         });
         break;
 
-      case "like_post":
+      case "like_post": {
         // Confirmed against https://developer.unipile.com/reference/postscontroller_addpostreaction —
-        // this is POST /posts/reaction with post_id/account_id/reaction_type
-        // in the BODY, not a /posts/{id}/reaction path. The old code hit a
-        // path that doesn't exist and used the wrong field name (`reaction`
-        // instead of `reaction_type`).
-        if (!lead.last_post_urn) {
-          console.warn(
-            `Lead ${lead.id} has no last_post_urn — skipping like_post`,
+        // POST /posts/reaction with post_id/account_id/reaction_type in body.
+        // post_id must be the post's `social_id` (confirmed in
+        // https://developer.unipile.com/docs/posts-and-comments), which we
+        // don't have stored anywhere — nothing populates last_post_urn on a
+        // lead. Rather than depend on a column that's never written, fetch
+        // their most recent post just-in-time via
+        // https://developer.unipile.com/reference/userscontroller_listallposts.
+        let postId = lead.last_post_urn;
+        if (!postId) {
+          const postsRes = await fetch(
+            `${base}/users/${lead.linkedin_urn}/posts?account_id=${accountId}&limit=1`,
+            { headers: { "X-API-KEY": apiKey } },
           );
-          return false;
+          if (!postsRes.ok) {
+            response = postsRes;
+            break;
+          }
+          const postsData = await postsRes.json();
+          const items = postsData.items || postsData.object?.items || [];
+          postId = items[0]?.social_id;
+          if (!postId) {
+            console.warn(
+              `Lead ${lead.id} has no recent posts to like — skipping like_post`,
+            );
+            return false;
+          }
         }
         response = await fetch(`${base}/posts/reaction`, {
           method: "POST",
           headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
           body: JSON.stringify({
             account_id: accountId,
-            post_id: lead.last_post_urn,
+            post_id: postId,
             reaction_type: "like",
           }),
         });
         break;
+      }
 
       case "withdraw_request": {
         // Confirmed against https://developer.unipile.com/reference/userscontroller_cancelinvitation —
