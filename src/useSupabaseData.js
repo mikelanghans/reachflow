@@ -466,6 +466,7 @@ export function useSupabaseData(agencyId) {
     if ("sequenceStatus" in updates)
       dbUpdates.sequence_status = updates.sequenceStatus;
     if ("currentStep" in updates) dbUpdates.current_step = updates.currentStep;
+    if ("stepEnteredAt" in updates) dbUpdates.step_entered_at = updates.stepEnteredAt;
 
     const { error } = await supabase
       .from("leads")

@@ -2353,10 +2353,24 @@ function Leads({ leads, setLeads, updateLeadsBulk, deleteLeadsBulk, logActivity,
     clearSel();
     if (updateLeadsBulk) {
       try {
-        await updateLeadsBulk(ids, { campaign_id: campaignId, sequenceStatus: "active", currentStep: 0 });
+        await updateLeadsBulk(ids, { campaign_id: campaignId, sequenceStatus: "active", currentStep: 0, stepEnteredAt: new Date().toISOString() });
         setToast(`✓ ${ids.length} lead${ids.length > 1 ? "s" : ""} assigned to "${campaignName}"`);
       } catch {
         setToast("Couldn't assign campaign — try again");
+      }
+      setTimeout(() => setToast(null), 4000);
+    }
+  };
+  const bulkResetSequence = async () => {
+    const ids = [...selected];
+    if (!window.confirm(`Reset ${ids.length} lead${ids.length > 1 ? "s" : ""} back to step 1 of their flow? This restarts the sequence — it does not undo any real LinkedIn actions already taken.`)) return;
+    clearSel();
+    if (updateLeadsBulk) {
+      try {
+        await updateLeadsBulk(ids, { sequenceStatus: "active", currentStep: 0, stepEnteredAt: new Date().toISOString() });
+        setToast(`✓ ${ids.length} lead${ids.length > 1 ? "s" : ""} reset to step 1`);
+      } catch {
+        setToast("Couldn't reset — try again");
       }
       setTimeout(() => setToast(null), 4000);
     }
@@ -2426,6 +2440,7 @@ function Leads({ leads, setLeads, updateLeadsBulk, deleteLeadsBulk, logActivity,
               )}
             </div>
             <button onClick={bulkExport} style={{ background: T.card, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 12 }}>↓ Export</button>
+            <button onClick={bulkResetSequence} style={{ background: T.card, color: T.yellow, border: `1px solid ${T.yellow}44`, borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>↺ Reset sequence</button>
           </div>
           <button onClick={clearSel} style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button>
         </div>
