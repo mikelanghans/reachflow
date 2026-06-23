@@ -1561,7 +1561,7 @@ function ImportModal({ onClose, onImport, clients = [] }) {
   // Native search state
   const connectedClients = clients.filter(c => c.linkedinConnected && c.unipileAccountId);
   const [searchClientId, setSearchClientId] = useState(() => connectedClients[0]?.id || "");
-  const [searchFilters, setSearchFilters] = useState({ title: "", company: "", industry: "", location: "", degree: "" });
+  const [searchFilters, setSearchFilters] = useState({ name: "", title: "", company: "", industry: "", location: "", degree: "" });
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchSelected, setSearchSelected] = useState(new Set());
@@ -1587,7 +1587,7 @@ function ImportModal({ onClose, onImport, clients = [] }) {
           client_id: searchClientId,
           api: 'classic',
           category: 'people',
-          keywords: [searchFilters.title, searchFilters.company, searchFilters.industry].filter(Boolean).join(' '),
+          keywords: [searchFilters.name, searchFilters.title, searchFilters.company, searchFilters.industry].filter(Boolean).join(' '),
           title: searchFilters.title || undefined,
           location: searchFilters.location ? [searchFilters.location] : undefined,
         }),
@@ -1604,6 +1604,7 @@ function ImportModal({ onClose, onImport, clients = [] }) {
         pushToast(data.error || "Search failed", "error");
         // Demo fallback so the UI still has something to show during setup
         setSearchResults(DEMO_SEARCH_RESULTS.filter(r =>
+          (!searchFilters.name     || r.name.toLowerCase().includes(searchFilters.name.toLowerCase())) &&
           (!searchFilters.title    || r.title.toLowerCase().includes(searchFilters.title.toLowerCase())) &&
           (!searchFilters.industry || r.company.toLowerCase().includes(searchFilters.industry.toLowerCase())) &&
           (!searchFilters.location || r.location.toLowerCase().includes(searchFilters.location.toLowerCase()))
@@ -1829,6 +1830,11 @@ function ImportModal({ onClose, onImport, clients = [] }) {
                 </div>
               )}
 
+              <div style={{ marginBottom: "1rem" }}>
+                <div style={{ color: T.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Name <span style={{ color: T.faint, fontWeight: 400, textTransform: "none" }}>(optional — for a specific person)</span></div>
+                <input style={{ ...inp }} placeholder="e.g. Jane Doe" value={searchFilters.name} onChange={e => setFilter({ name: e.target.value })} onKeyDown={e => e.key === "Enter" && runSearch()} />
+              </div>
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: "1rem" }}>
                 {[
                   ["Job title", "title", "e.g. VP Sales"],
@@ -1855,7 +1861,7 @@ function ImportModal({ onClose, onImport, clients = [] }) {
                 </div>
               </div>
 
-              <button onClick={runSearch} disabled={searchLoading || !searchClientId || (!searchFilters.title && !searchFilters.industry && !searchFilters.company && !searchFilters.location)}
+              <button onClick={runSearch} disabled={searchLoading || !searchClientId || (!searchFilters.name && !searchFilters.title && !searchFilters.industry && !searchFilters.company && !searchFilters.location)}
                 style={{ width: "100%", background: searchLoading ? T.faint : T.accent, color: searchLoading ? T.muted : "#0d1117", border: "none", borderRadius: 8, padding: "11px", cursor: searchLoading ? "default" : "pointer", fontSize: 13, fontWeight: 700, marginBottom: "0.75rem" }}>
                 {searchLoading ? "Searching LinkedIn…" : "🔍 Search LinkedIn"}
               </button>
