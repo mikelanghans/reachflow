@@ -264,6 +264,7 @@ async function processAgency(agency, results) {
           accountId: client.unipile_account_id,
           lead,
           node: currentNode,
+          voiceProfile: agency.voice_profile,
         });
         if (actionOk) {
           remainingActionQuota--;
@@ -309,6 +310,13 @@ async function processAgency(agency, results) {
 
       // Build the personalised message
       let message = personalise(currentNode.content || "", lead);
+
+      // Fill any [bracketed] placeholders (e.g. "[topic]", "[ICP]") with
+      // something specific and plausible based on this lead's actual
+      // profile data — these are template stand-ins, not {{tokens}}, so
+      // personalise() above doesn't touch them and they'd otherwise go out
+      // to real prospects with literal brackets in the text.
+      message = await fillPlaceholders(message, lead, agency.voice_profile);
 
       // Vary the phrasing per-lead so identical templates don't go out
       // verbatim to everyone — defaults to on, agencies can disable in
@@ -522,6 +530,96 @@ function personalise(template, lead) {
 // other lead in the sequence — same intent, different phrasing/structure.
 // Controlled by agency.vary_messages (default on) so agencies that want
 // exact, predictable template control can turn it off.
+// Generates a real, specific comment on a lead's actual post — used by the
+// comment_post social action. Deliberately fails CLOSED (returns null/empty
+// rather than a generic fallback) if generation fails, since a vague
+// "Great post!" comment posted blind is worse than skipping the step.
+async function generateComment(postText, promptHint, voiceProfile) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || !postText?.trim()) return null;
+
+  const voiceContext = buildVoiceContextForScheduler(voiceProfile);
+  const hint = promptHint?.trim()
+    ? `Specific guidance for this comment: ${promptHint.trim()}\n\n`
+    : "";
+  const prompt = `${voiceContext}${hint}Write a short, genuine LinkedIn comment (1-2 sentences, under 200 characters) on this post. Reference something specific from the post itself — don't write a generic compliment. No emojis, no hashtags, no "Great post!" filler.\n\nPost:\n"${postText.slice(0, 1500)}"\n\nRespond with only the comment text, nothing else.`;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 150,
+        temperature: 1,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const text = data.content?.find((b) => b.type === "text")?.text?.trim();
+    return text || null;
+  } catch (err) {
+    console.error("generateComment failed:", err);
+    return null;
+  }
+}
+
+// Fills [bracketed] placeholders in a message template with specific,
+// plausible content inferred from the lead's actual profile data (title,
+// company) — e.g. "[topic]" -> "scaling past six figures" for a coach
+// targeting founders. Templates use [brackets] for things meant to be
+// filled per-lead/per-campaign and {{double_braces}} for exact-substitution
+// tokens (handled separately by personalise()); this only touches the
+// former and leaves {{tokens}} untouched. Skips the API call entirely if
+// there's nothing bracketed to fill. Fails open — returns the original
+// message (brackets and all) rather than blocking the send if generation
+// fails, since a message with leftover brackets is still better than no
+// message at all.
+async function fillPlaceholders(message, lead, voiceProfile) {
+  if (!/\[[^\]]+\]/.test(message)) return message; // nothing to fill
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return message;
+
+  const voiceContext = buildVoiceContextForScheduler(voiceProfile);
+  const leadContext = [
+    lead.name ? `Name: ${lead.name}` : null,
+    lead.title ? `Title: ${lead.title}` : null,
+    lead.company ? `Company: ${lead.company}` : null,
+  ].filter(Boolean).join("\n");
+
+  const prompt = `${voiceContext}This outreach message has [bracketed] placeholders meant to be filled in with something specific and plausible based on who this person is. Replace each [bracketed] placeholder with natural text that fits the sentence — infer something reasonable from their title/company below. Keep everything else exactly as written, including any {{tokens}} in double braces (leave those untouched). Don't add brackets, quotes, or notes — just the finished message.\n\nLead:\n${leadContext || "(no profile data available)"}\n\nMessage:\n"${message}"\n\nRespond with only the finished message, nothing else.`;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 300,
+        temperature: 0.7,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    if (!response.ok) return message;
+    const data = await response.json();
+    const text = data.content?.find((b) => b.type === "text")?.text?.trim();
+    return text || message;
+  } catch (err) {
+    console.error("fillPlaceholders failed, sending original:", err);
+    return message; // fail open
+  }
+}
+
 async function varyMessage(message, voiceProfile) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return message; // fail open — send the template as-is rather than block sending
@@ -665,7 +763,7 @@ async function sendViaUnipile({ accountId, lead, message, type }) {
 // the action and advance the step; full AI-driven content generation for
 // these two is a follow-up, since it requires fetching the lead's actual
 // recent post content from Unipile first.
-async function performSocialAction({ accountId, lead, node }) {
+async function performSocialAction({ accountId, lead, node, voiceProfile }) {
   const apiKey = process.env.UNIPILE_API_KEY;
   if (!apiKey) return false;
   if (!lead.linkedin_urn) {
@@ -813,13 +911,64 @@ async function performSocialAction({ accountId, lead, node }) {
         break;
       }
 
-      case "comment_post":
+      case "comment_post": {
+        // Confirmed against https://developer.unipile.com/reference/postscontroller_sendcomment —
+        // POST /posts/{post_id}/comments with account_id/text in body,
+        // where post_id is the post's social_id. Previously a deliberate
+        // no-op; now generates a real, specific comment via Claude based
+        // on the post's actual content, using the same pattern as
+        // varyMessage below.
+        const postsRes = await fetch(
+          `${base}/users/${lead.linkedin_urn}/posts?account_id=${accountId}&limit=1`,
+          { headers: { "X-API-KEY": apiKey } },
+        );
+        if (!postsRes.ok) {
+          response = postsRes;
+          break;
+        }
+        const postsData = await postsRes.json();
+        const items = postsData.items || postsData.object?.items || [];
+        const post = items[0];
+        if (!post?.social_id) {
+          console.warn(
+            `Lead ${lead.id} has no recent posts to comment on — skipping comment_post`,
+          );
+          return false;
+        }
+        if (!post.text?.trim()) {
+          console.warn(
+            `Lead ${lead.id}'s most recent post has no text content (image/video-only?) — skipping comment_post rather than commenting blind`,
+          );
+          return false;
+        }
+
+        const commentText = await generateComment(
+          post.text || "",
+          node.promptHint,
+          voiceProfile,
+        );
+        if (!commentText) {
+          console.warn(
+            `Lead ${lead.id}: comment generation failed/empty — skipping comment_post rather than posting something generic`,
+          );
+          return false;
+        }
+
+        response = await fetch(`${base}/posts/${post.social_id}/comments`, {
+          method: "POST",
+          headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
+          body: JSON.stringify({ account_id: accountId, text: commentText }),
+        });
+        break;
+      }
+
       case "ai_convo":
-        // Content-generation-dependent actions — log as a no-op success for now.
-        // TODO: fetch lead's recent post via Unipile, generate a comment with
-        // Claude using node.promptHint + the agency voice profile, then POST it.
+        // Full conversational handling (reading replies, deciding what to
+        // say, steering toward a booked call) is a materially bigger
+        // feature than a single comment — deliberately left as a no-op
+        // advance for now rather than half-building it.
         console.log(
-          `${node.type} is a content-dependent action — advancing without sending (not yet wired)`,
+          `ai_convo is a content-dependent action — advancing without sending (not yet wired)`,
         );
         return true;
 
