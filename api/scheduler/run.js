@@ -241,7 +241,6 @@ async function processAgency(agency, results) {
         "view_profile",
         "like_post",
         "comment_post",
-        "ai_convo",
         "follow_profile",
         "withdraw_request",
         "follow_company",
@@ -252,6 +251,51 @@ async function processAgency(agency, results) {
         "send_inmail",
         "connection_request",
       ];
+
+      // ai_convo is fundamentally different from the other social actions:
+      // it's not a one-shot fire-and-advance step, it's an ongoing mode that
+      // stays at this step indefinitely, replying each time the lead sends
+      // a new message, until something actually signals the goal is met
+      // (e.g. a meeting gets booked). Handling it here, separately, rather
+      // than lumping it into SOCIAL_ONLY_TYPES below, since it can validly
+      // do nothing this run (no new reply yet) without that counting as a
+      // skip, error, or step-advance the way every other action type does.
+      if (currentNode.type === "ai_convo") {
+        const convoResult = await runAiConversation({
+          accountId: client.unipile_account_id,
+          lead,
+          agency,
+          campaign,
+        });
+        if (convoResult.action === "wait") {
+          continue; // nothing new to respond to — leave the lead exactly where it is
+        }
+        results.processed++;
+        if (convoResult.action === "error") {
+          results.errors.push({ lead_id: lead.id, error: convoResult.error || "ai_convo failed" });
+          continue;
+        }
+        if (convoResult.action === "queued") {
+          results.queued++;
+          await sleep(1000 + Math.random() * 4000);
+          continue;
+        }
+        results.sent++;
+        if (convoResult.action === "booked") {
+          await supabase
+            .from("leads")
+            .update({ status: "meeting", sequence_status: "completed" })
+            .eq("id", lead.id);
+          await supabase.from("activity_log").insert({
+            agency_id: agency.id,
+            type: "reply",
+            message: `Meeting booked via AI conversation · ${lead.name}`,
+            meta: { lead_id: lead.id, campaign: campaign.name },
+          });
+        }
+        await sleep(1000 + Math.random() * 4000);
+        continue;
+      }
 
       if (SOCIAL_ONLY_TYPES.includes(currentNode.type)) {
         if (remainingActionQuota <= 0) {
@@ -620,6 +664,126 @@ async function fillPlaceholders(message, lead, voiceProfile) {
   }
 }
 
+// Handles the ai_convo flow step: checks whether the lead has sent a new
+// message we haven't responded to yet, and if so, generates a real reply
+// with Claude (using the full conversation history + voice profile) and
+// sends it. This is an ongoing mode, not a one-shot action — most runs will
+// find nothing new and return {action:'wait'}, which is normal, not an
+// error or a skip.
+async function runAiConversation({ accountId, lead, agency, campaign }) {
+  const { data: history, error: historyError } = await supabase
+    .from("messages")
+    .select("direction, body, sent_at")
+    .eq("lead_id", lead.id)
+    .order("sent_at", { ascending: true });
+
+  if (historyError) {
+    return { action: "error", error: "Couldn't load conversation history" };
+  }
+  if (!history || history.length === 0) {
+    return { action: "wait" }; // conversation hasn't started yet
+  }
+  if (history[history.length - 1].direction !== "in") {
+    return { action: "wait" }; // we already replied; waiting on them
+  }
+  // If review mode is on, also don't generate-and-reply again while a
+  // previous AI reply is still sitting unreviewed in the queue — otherwise
+  // every scheduler run would queue up another draft for the same message.
+  if (campaign.review_mode) {
+    const { count: pendingCount } = await supabase
+      .from("review_queue")
+      .select("id", { count: "exact" })
+      .eq("lead_id", lead.id)
+      .eq("status", "pending");
+    if (pendingCount > 0) return { action: "wait" };
+  }
+
+  const transcript = history
+    .map((m) => `${m.direction === "in" ? lead.name || "Lead" : "You"}: ${m.body}`)
+    .join("\n");
+
+  const voiceContext = buildVoiceContextForScheduler(agency.voice_profile);
+  const prompt = `${voiceContext}You're continuing a real LinkedIn conversation with a prospect, working toward getting them on a call. Read the conversation below and write your next reply — natural, conversational, 1-3 sentences. Handle objections honestly; don't push past a clear "no." If they've explicitly agreed to a call/meeting in their most recent message, acknowledge it warmly rather than re-asking.\n\nConversation so far (oldest to newest):\n${transcript}\n\nRespond in exactly this format, nothing else:\nREPLY: <your next message>\nBOOKED: <yes only if they explicitly agreed to a meeting/call in their most recent message, otherwise no>`;
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return { action: "wait" }; // fail closed — don't reply with nothing useful
+
+  let replyText, booked = false;
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 250,
+        temperature: 0.8,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    if (!response.ok) return { action: "error", error: `Claude API returned ${response.status}` };
+    const data = await response.json();
+    const text = data.content?.find((b) => b.type === "text")?.text?.trim() || "";
+    const match = text.match(/REPLY:\s*([\s\S]*?)\n+BOOKED:\s*(yes|no)/i);
+    if (match) {
+      replyText = match[1].trim();
+      booked = match[2].toLowerCase() === "yes";
+    } else {
+      replyText = text; // fallback if Claude didn't follow the format exactly
+    }
+  } catch (err) {
+    return { action: "error", error: err.message || "Claude API call failed" };
+  }
+
+  if (!replyText) return { action: "error", error: "Empty AI reply" };
+
+  // Respect review mode — an AI-drafted reply going out to a real person
+  // with no human in the loop is exactly the case review_mode exists for.
+  // Queue it the same way regular outbound messages already are, rather
+  // than sending directly.
+  if (campaign.review_mode) {
+    await supabase.from("review_queue").insert({
+      agency_id: agency.id,
+      campaign_id: campaign.id,
+      lead_id: lead.id,
+      message_type: "AI conversation reply",
+      channel: "linkedin",
+      message_body: replyText,
+      status: "pending",
+      scheduled_for: new Date().toISOString(),
+    });
+    await supabase.from("activity_log").insert({
+      agency_id: agency.id,
+      type: "reply",
+      message: `AI reply queued for review: ${lead.name}`,
+      meta: { lead_id: lead.id, campaign: campaign.name, preview: replyText.slice(0, 80) },
+    });
+    return { action: "queued", booked };
+  }
+
+  const sent = await sendViaUnipile({ accountId, lead, message: replyText, type: "message" });
+  if (!sent) return { action: "error", error: "Unipile send failed" };
+
+  await supabase.from("messages").insert({
+    agency_id: agency.id,
+    lead_id: lead.id,
+    direction: "out",
+    body: replyText,
+    channel: "linkedin",
+  });
+  await supabase.from("activity_log").insert({
+    agency_id: agency.id,
+    type: "reply",
+    message: `AI replied to ${lead.name}`,
+    meta: { lead_id: lead.id, campaign: campaign.name, preview: replyText.slice(0, 80) },
+  });
+
+  return { action: booked ? "booked" : "replied" };
+}
+
 async function varyMessage(message, voiceProfile) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return message; // fail open — send the template as-is rather than block sending
@@ -961,16 +1125,6 @@ async function performSocialAction({ accountId, lead, node, voiceProfile }) {
         });
         break;
       }
-
-      case "ai_convo":
-        // Full conversational handling (reading replies, deciding what to
-        // say, steering toward a booked call) is a materially bigger
-        // feature than a single comment — deliberately left as a no-op
-        // advance for now rather than half-building it.
-        console.log(
-          `ai_convo is a content-dependent action — advancing without sending (not yet wired)`,
-        );
-        return true;
 
       default:
         console.warn(`Unknown social action type: ${node.type}`);
