@@ -32,7 +32,14 @@ export default async function handler(req, res) {
   }
 
   console.log("Scheduler run started:", new Date().toISOString());
-  const results = { processed: 0, sent: 0, queued: 0, skipped: 0, errors: [] };
+  const results = {
+    processed: 0,
+    sent: 0,
+    social_actions: 0,
+    queued: 0,
+    skipped: 0,
+    errors: [],
+  };
 
   try {
     // 1. Get all active agencies with their settings
@@ -267,6 +274,7 @@ async function processAgency(agency, results) {
         });
         if (actionOk) {
           remainingActionQuota--;
+          results.social_actions++;
           await supabase.from("activity_log").insert({
             agency_id: agency.id,
             type: "reply",
