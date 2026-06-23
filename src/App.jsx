@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import Papa from "papaparse";
 import { supabase } from "./supabase.js";
 import AuthScreen from "./AuthScreen.jsx";
 import { useSupabaseData } from "./useSupabaseData.js";
@@ -1552,6 +1553,8 @@ function ImportModal({ onClose, onImport, clients = [] }) {
   const [rows, setRows] = useState([]);
   const [csvDragging, setCsvDragging] = useState(false);
   const [csvFile, setCsvFile] = useState(null);
+  const [csvError, setCsvError] = useState(null);
+  const csvInputRef = useRef(null);
   const [listName, setListName] = useState("");
 
   // Native search state
@@ -1705,6 +1708,74 @@ function ImportModal({ onClose, onImport, clients = [] }) {
     }
   };
   const hasProfileUrls = profileUrlsText.trim().length > 0;
+
+  // Flexible column lookup — different exports (LinkedIn, Sales Navigator,
+  // Apollo, generic spreadsheets) use different header names for the same
+  // field, so we match case/space/punctuation-insensitively against a list
+  // of known aliases per field rather than requiring exact header text.
+  const findCol = (headers, aliases) => {
+    const norm = h => h.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const normalizedAliases = aliases.map(norm);
+    return headers.find(h => normalizedAliases.includes(norm(h)));
+  };
+
+  const parseCsvFile = (file) => {
+    setCsvError(null);
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (result) => {
+        if (result.errors?.length) {
+          setCsvError(result.errors[0].message || "Couldn't parse this file");
+          setCsvFile(null);
+          return;
+        }
+        const headers = result.meta.fields || [];
+        const firstCol   = findCol(headers, ["first name", "firstname", "first"]);
+        const lastCol    = findCol(headers, ["last name", "lastname", "last"]);
+        const nameCol    = findCol(headers, ["name", "full name", "fullname"]);
+        const titleCol   = findCol(headers, ["title", "job title", "headline", "position"]);
+        const companyCol = findCol(headers, ["company", "company name", "organization", "current company"]);
+        const urlCol     = findCol(headers, ["linkedin url", "linkedinurl", "profile url", "linkedin", "url"]);
+        const locCol     = findCol(headers, ["location", "city", "geography"]);
+
+        if (!nameCol && !(firstCol || lastCol)) {
+          setCsvError('No name column found — expected "Name" or "First Name"/"Last Name"');
+          setCsvFile(null);
+          return;
+        }
+
+        const parsed = result.data.map((r, i) => {
+          const name = nameCol ? (r[nameCol] || "").trim()
+            : [r[firstCol], r[lastCol]].filter(Boolean).join(" ").trim();
+          const ok = !!name;
+          return {
+            id: `csv-${i}-${name || i}`,
+            ok,
+            selected: ok,
+            name: name || "(no name)",
+            title: titleCol ? (r[titleCol] || "").trim() : "",
+            company: companyCol ? (r[companyCol] || "").trim() : "",
+            location: locCol ? (r[locCol] || "").trim() : "",
+            linkedin_url: urlCol ? (r[urlCol] || "").trim() : "",
+            linkedin_urn: null,
+            error: ok ? null : "Missing name — row skipped",
+          };
+        });
+        setRows(parsed);
+      },
+      error: (err) => {
+        setCsvError(err.message || "Couldn't parse this file");
+        setCsvFile(null);
+      },
+    });
+  };
+
+  const handleCsvFile = (file) => {
+    if (!file) return;
+    setCsvFile(file);
+    parseCsvFile(file);
+  };
 
   const toggleRow = (id) => setRows(r => r.map(x => x.id === id ? { ...x, selected: !x.selected } : x));
   const toggleAll = () => { const okRows = rows.filter(r => r.ok); const allOn = okRows.every(r => r.selected); setRows(r => r.map(x => x.ok ? ({ ...x, selected: !allOn }) : x)); };
@@ -1924,8 +1995,8 @@ function ImportModal({ onClose, onImport, clients = [] }) {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                 <div>
-                  <div style={{ color: T.text, fontWeight: 700, fontSize: 15 }}>Preview — {rows.length} profile{rows.length !== 1 ? "s" : ""} looked up</div>
-                  <div style={{ color: T.muted, fontSize: 12, marginTop: 2 }}>{selectedCount} selected · {rows.filter(r => !r.ok).length} couldn't be resolved</div>
+                  <div style={{ color: T.text, fontWeight: 700, fontSize: 15 }}>Preview — {rows.length} {tab === "csv" ? "row" : "profile"}{rows.length !== 1 ? "s" : ""} {tab === "csv" ? "parsed" : "looked up"}</div>
+                  <div style={{ color: T.muted, fontSize: 12, marginTop: 2 }}>{selectedCount} selected · {rows.filter(r => !r.ok).length} {tab === "csv" ? "skipped (missing name)" : "couldn't be resolved"}</div>
                 </div>
                 {rows.some(r => r.ok) && (
                   <button onClick={toggleAll} style={{ background: T.card, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 10px", cursor: "pointer", fontSize: 12 }}>
@@ -1978,16 +2049,22 @@ function ImportModal({ onClose, onImport, clients = [] }) {
               <div style={{ color: T.muted, fontSize: 13, marginBottom: "1.25rem", lineHeight: 1.6 }}>
                 Upload a CSV exported from LinkedIn, Sales Navigator, Apollo, or any spreadsheet. We'll map the columns automatically.
               </div>
+              <input ref={csvInputRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
+                onChange={e => handleCsvFile(e.target.files?.[0] || null)} />
               <div
+                onClick={() => csvInputRef.current?.click()}
                 onDragOver={e => { e.preventDefault(); setCsvDragging(true); }}
                 onDragLeave={() => setCsvDragging(false)}
-                onDrop={e => { e.preventDefault(); setCsvDragging(false); setCsvFile(e.dataTransfer.files[0]); }}
+                onDrop={e => { e.preventDefault(); setCsvDragging(false); handleCsvFile(e.dataTransfer.files?.[0] || null); }}
                 style={{ border: `2px dashed ${csvDragging ? T.accent : T.border}`, borderRadius: 12, padding: "2.5rem", textAlign: "center", background: csvDragging ? T.accentDim : T.card, transition: "all 0.15s", marginBottom: "1.25rem", cursor: "pointer" }}>
                 {csvFile ? (
                   <>
                     <div style={{ fontSize: 32, marginBottom: 8 }}>📄</div>
                     <div style={{ color: T.text, fontWeight: 600, marginBottom: 4 }}>{csvFile.name}</div>
-                    <div style={{ color: T.muted, fontSize: 12 }}>Ready to import · <span style={{ color: T.accent, cursor: "pointer" }} onClick={() => setCsvFile(null)}>Remove</span></div>
+                    <div style={{ color: T.muted, fontSize: 12 }}>
+                      {csvError ? <span style={{ color: T.red }}>{csvError}</span> : `${rows.length} row${rows.length !== 1 ? "s" : ""} found`} ·{" "}
+                      <span style={{ color: T.accent, cursor: "pointer" }} onClick={e => { e.stopPropagation(); setCsvFile(null); setRows([]); setCsvError(null); }}>Remove</span>
+                    </div>
                   </>
                 ) : (
                   <>
@@ -2001,7 +2078,7 @@ function ImportModal({ onClose, onImport, clients = [] }) {
                 <div style={{ color: T.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>List Name</div>
                 <input style={inp} placeholder="e.g. Apollo Export — May 2026" value={listName} onChange={e => setListName(e.target.value)} />
               </div>
-              <div style={{ color: T.muted, fontSize: 12 }}>Expected columns: <span style={{ color: T.text }}>First Name, Last Name, Title, Company, LinkedIn URL</span> (others ignored)</div>
+              <div style={{ color: T.muted, fontSize: 12 }}>Expected columns: <span style={{ color: T.text }}>First Name, Last Name, Title, Company, LinkedIn URL</span> (others ignored — column names are matched flexibly)</div>
             </div>
           )}
         </div>
@@ -2017,7 +2094,7 @@ function ImportModal({ onClose, onImport, clients = [] }) {
               <button onClick={startLookup} disabled={!hasProfileUrls || connectedClients.length === 0 || lookupRunning} style={{ background: (hasProfileUrls && connectedClients.length > 0) ? T.accent : T.faint, color: (hasProfileUrls && connectedClients.length > 0) ? "#0d1117" : T.muted, border: "none", borderRadius: 7, padding: "8px 18px", cursor: (hasProfileUrls && connectedClients.length > 0) ? "pointer" : "default", fontSize: 13, fontWeight: 700 }}>Look up profiles →</button>
             )}
             {stage === "input" && tab === "csv" && (
-              <button onClick={() => csvFile && setStage("preview")} disabled={!csvFile} style={{ background: csvFile ? T.accent : T.faint, color: csvFile ? "#0d1117" : T.muted, border: "none", borderRadius: 7, padding: "8px 18px", cursor: csvFile ? "pointer" : "default", fontSize: 13, fontWeight: 700 }}>Preview Import →</button>
+              <button onClick={() => rows.length > 0 && setStage("preview")} disabled={!csvFile || !!csvError || rows.length === 0} style={{ background: (csvFile && !csvError && rows.length > 0) ? T.accent : T.faint, color: (csvFile && !csvError && rows.length > 0) ? "#0d1117" : T.muted, border: "none", borderRadius: 7, padding: "8px 18px", cursor: (csvFile && !csvError && rows.length > 0) ? "pointer" : "default", fontSize: 13, fontWeight: 700 }}>Preview Import →</button>
             )}
             {stage === "preview" && (
               <button onClick={() => {
