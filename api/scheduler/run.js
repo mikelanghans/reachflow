@@ -406,13 +406,38 @@ const SOCIAL_ACTION_LABEL = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function isWithinSendWindow(now, agency) {
-  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+  // IMPORTANT: now.getDay()/now.getHours() return UTC values on Vercel's
+  // serverless runtime, not the agency's local time. That meant "8:00–17:00"
+  // was actually being enforced as 8am–5pm UTC — for a US-based agency that
+  // silently blocks sends during their actual workday (confirmed in
+  // production: a 1:33pm Pacific test was rejected as "outside send window"
+  // because that's 20:33 UTC, past the 17:00 cutoff). Use the agency's IANA
+  // timezone so the window means what it says.
+  //
+  // NOTE: this only makes the AGENCY's own send window timezone-correct.
+  // The Settings UI separately claims per-PROSPECT timezone targeting
+  // (detecting each lead's timezone from their LinkedIn location) — that
+  // feature doesn't actually exist anywhere in this scheduler and would be
+  // a much larger separate build (geocoding location strings to timezones).
+  // Don't confuse the two; this fix doesn't implement that.
+  const tz = agency.timezone || "America/Los_Angeles";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "short",
+    hour: "numeric",
+    hour12: false,
+  }).formatToParts(now);
+
+  const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const dayOfWeek = weekdayMap[parts.find((p) => p.type === "weekday")?.value];
+  let hour = parseInt(parts.find((p) => p.type === "hour")?.value, 10);
+  if (hour === 24) hour = 0; // some runtimes return 24 instead of 0 for midnight with hour12:false
+
   const sendDays = agency.send_days || [1, 2, 3, 4]; // Mon-Thu default
   if (!sendDays.includes(dayOfWeek)) return false;
 
-  const hour = now.getHours();
-  const startHour = parseInt((agency.send_start || "08:00").split(":")[0]);
-  const endHour = parseInt((agency.send_end || "17:00").split(":")[0]);
+  const startHour = parseInt((agency.send_start || "08:00").split(":")[0], 10);
+  const endHour = parseInt((agency.send_end || "17:00").split(":")[0], 10);
 
   return hour >= startHour && hour < endHour;
 }
