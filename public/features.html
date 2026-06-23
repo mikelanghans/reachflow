@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReachFlow — Features</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0d1117;--surface:#161b22;--card:#1c2128;--border:#30363d;
+    --accent:#2dce98;--text:#e6edf3;--muted:#7d8590;--faint:#3d444d;
+    --blue:#3b82f6;--purple:#8b5cf6;--amber:#d29922;--red:#f85149;--green:#3fb950;
+  }
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
+
+  /* ── Header ── */
+  .site-header{background:var(--surface);border-bottom:1px solid var(--border);padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+  .logo{font-size:20px;font-weight:800;letter-spacing:-.03em}
+  .logo span{color:var(--accent)}
+  .back-link{color:var(--muted);text-decoration:none;font-size:13px;display:flex;align-items:center;gap:6px;transition:color .15s}
+  .back-link:hover{color:var(--accent)}
+  .header-badge{background:var(--accent);color:#0d1117;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px}
+
+  /* ── Hero ── */
+  .hero{text-align:center;padding:5rem 2rem 3rem;max-width:760px;margin:0 auto}
+  .hero h1{font-size:clamp(32px,5vw,52px);font-weight:800;letter-spacing:-.03em;margin-bottom:1rem;line-height:1.1}
+  .hero h1 span{color:var(--accent)}
+  .hero p{color:var(--muted);font-size:18px;line-height:1.7;margin-bottom:2rem}
+  .hero-badges{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .hero-badge{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:6px 16px;font-size:13px;color:var(--muted)}
+  .hero-badge strong{color:var(--text)}
+
+  /* ── Stats bar ── */
+  .stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:4rem}
+  .stat{background:var(--surface);padding:1.5rem 2rem;text-align:center}
+  .stat-num{font-size:32px;font-weight:800;color:var(--accent);letter-spacing:-.03em}
+  .stat-label{color:var(--muted);font-size:13px;margin-top:4px}
+
+  /* ── Container ── */
+  .container{max-width:1100px;margin:0 auto;padding:0 2rem 6rem}
+
+  /* ── Section headers ── */
+  .section-label{color:var(--accent);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;margin-bottom:12px}
+  .section-title{font-size:32px;font-weight:800;letter-spacing:-.02em;margin-bottom:.5rem}
+  .section-sub{color:var(--muted);font-size:16px;margin-bottom:2.5rem}
+
+  /* ── Feature grid ── */
+  .feature-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1.25rem;margin-bottom:4rem}
+  .feature-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.5rem;transition:border-color .15s,transform .15s}
+  .feature-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .feature-card.highlight{border-color:var(--accent)44;background:linear-gradient(135deg,var(--card) 70%,rgba(45,206,152,.05))}
+  .feature-icon{font-size:28px;margin-bottom:.875rem}
+  .feature-title{font-size:15px;font-weight:700;margin-bottom:.5rem;display:flex;align-items:center;gap:8px}
+  .feature-badge{font-size:9px;font-weight:800;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:.06em}
+  .badge-new{background:rgba(45,206,152,.15);color:var(--accent)}
+  .badge-ahead{background:rgba(59,130,246,.15);color:var(--blue)}
+  .badge-syndie{background:rgba(248,81,73,.12);color:var(--red)}
+  .feature-desc{color:var(--muted);font-size:13px;line-height:1.7;margin-bottom:.875rem}
+  .pain-point{background:var(--surface);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:.625rem .875rem;font-size:12px;color:var(--muted)}
+  .pain-point strong{color:var(--text)}
+  .vs-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(45,206,152,.08);border:1px solid rgba(45,206,152,.2);border-radius:5px;padding:3px 8px;font-size:11px;color:var(--accent);margin-top:.625rem}
+
+  /* ── Comparison table ── */
+  .comparison{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:4rem}
+  .comparison table{width:100%;border-collapse:collapse}
+  .comparison th{background:var(--surface);padding:1rem 1.25rem;text-align:left;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--border)}
+  .comparison th:nth-child(2),.comparison th:nth-child(3){text-align:center}
+  .comparison td{padding:.875rem 1.25rem;font-size:13px;color:var(--text);border-bottom:1px solid var(--faint)}
+  .comparison tr:last-child td{border-bottom:none}
+  .comparison tr:hover td{background:rgba(255,255,255,.02)}
+  .comparison td:nth-child(2),.comparison td:nth-child(3){text-align:center;font-size:18px}
+  .comparison td:first-child{color:var(--text)}
+  .comparison .cat{background:var(--surface);padding:.5rem 1.25rem;font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--border)}
+
+  /* ── Stack section ── */
+  .stack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;margin-bottom:4rem}
+  .stack-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;display:flex;gap:14px;align-items:flex-start}
+  .stack-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+  .stack-name{font-size:14px;font-weight:700;margin-bottom:3px}
+  .stack-role{color:var(--accent);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+  .stack-desc{color:var(--muted);font-size:12px;line-height:1.6}
+
+  /* ── CTA ── */
+  .cta-section{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4rem;text-align:center;margin-bottom:4rem}
+  .cta-section h2{font-size:32px;font-weight:800;margin-bottom:.875rem;letter-spacing:-.02em}
+  .cta-section p{color:var(--muted);font-size:16px;margin-bottom:2rem}
+  .cta-btn{display:inline-block;background:var(--accent);color:#0d1117;text-decoration:none;border-radius:10px;padding:14px 32px;font-weight:700;font-size:15px;transition:opacity .15s}
+  .cta-btn:hover{opacity:.9}
+
+  @media(max-width:640px){
+    .stats-bar{grid-template-columns:1fr 1fr}
+    .hero{padding:3rem 1.25rem 2rem}
+    .container{padding:0 1.25rem 4rem}
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="logo">reach<span>flow</span></div>
+  <div style="display:flex;align-items:center;gap:16px">
+    <span class="header-badge">Agency Platform</span>
+    <a href="/" class="back-link">← Back to app</a>
+  </div>
+</header>
+
+<div class="hero">
+  <h1>Everything your agency needs<br><span>to run LinkedIn outreach at scale</span></h1>
+  <p>ReachFlow is built specifically for agencies managing outreach across multiple clients — not solo salespeople. Every feature is designed around the agency workflow.</p>
+  <div class="hero-badges">
+    <div class="hero-badge"><strong>24</strong> features</div>
+    <div class="hero-badge"><strong>6</strong> AI-powered tools</div>
+    <div class="hero-badge"><strong>Multi-client</strong> dashboard</div>
+    <div class="hero-badge"><strong>White-label</strong> ready</div>
+    <div class="hero-badge">Syndie <strong>feature parity</strong> + more</div>
+  </div>
+</div>
+
+<div class="stats-bar">
+  <div class="stat"><div class="stat-num">24</div><div class="stat-label">Total features</div></div>
+  <div class="stat"><div class="stat-num">12</div><div class="stat-label">Ahead of Syndie</div></div>
+  <div class="stat"><div class="stat-num">6</div><div class="stat-label">AI tools built in</div></div>
+  <div class="stat"><div class="stat-num">∞</div><div class="stat-label">Clients per agency</div></div>
+</div>
+
+<div class="container">
+
+  <!-- Core LinkedIn Features -->
+  <div class="section-label">Core LinkedIn automation</div>
+  <div class="section-title">Full outreach automation</div>
+  <div class="section-sub">Everything Syndie does — and more — running under your agency's brand.</div>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="feature-icon">👤</div>
+      <div class="feature-title">Profile visits <span class="feature-badge badge-syndie">Syndie parity</span></div>
+      <div class="feature-desc">Automatically visits prospect profiles before connecting — puts your name in their "Who viewed my profile" notification before you say anything.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Cold connection requests get ignored. A profile view makes you familiar before you ask.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">♥</div>
+      <div class="feature-title">Post engagement <span class="feature-badge badge-syndie">Syndie parity</span></div>
+      <div class="feature-desc">Likes prospects' recent LinkedIn posts as part of the warming sequence. Creates a second touchpoint without any commitment.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Connection requests from total strangers get a 20–30% acceptance rate. Warmed prospects get 50–70%.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">💬</div>
+      <div class="feature-title">AI-written comments <span class="feature-badge badge-new">New</span></div>
+      <div class="feature-desc">Claude reads the actual post content and writes a genuine, contextual comment — not a template. Configurable tone per campaign.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Generic comments ("Great post!") damage credibility. Context-specific comments build it.</div>
+      <div class="vs-badge">✓ Better than Syndie — they use templates, we use AI on the actual post</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">🔗</div>
+      <div class="feature-title">Connection requests <span class="feature-badge badge-syndie">Syndie parity</span></div>
+      <div class="feature-desc">Sends personalised connection requests with AI-generated notes based on the prospect's ICP, industry, and recent activity.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Blank connection requests get ignored. Personalised notes referencing the prospect's context get accepted.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">⑃</div>
+      <div class="feature-title">Conditional sequences <span class="feature-badge badge-syndie">Syndie parity</span></div>
+      <div class="feature-desc">Multi-step sequences that branch based on what the prospect actually does — replied, connected, no response. Visual flow builder with drag-and-drop nodes.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Fixed-schedule sequences treat every prospect the same. Conditional sequences adapt to real behaviour.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">⚗</div>
+      <div class="feature-title">A/B testing <span class="feature-badge badge-syndie">Syndie parity</span></div>
+      <div class="feature-desc">Split test two message variants simultaneously. Live results tab shows reply rates per variant with a winner badge when statistical significance is reached.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Most agencies guess at what works. A/B testing turns outreach into a data-driven operation you can show clients.</div>
+    </div>
+  </div>
+
+  <!-- Agency-Specific -->
+  <div class="section-label">Agency tools</div>
+  <div class="section-title">Built for agencies, not solo reps</div>
+  <div class="section-sub">These are the features Syndie doesn't have. The ones that turn outreach into a scalable agency service.</div>
+
+  <div class="feature-grid">
+    <div class="feature-card highlight">
+      <div class="feature-icon">▦</div>
+      <div class="feature-title">Multi-client dashboard <span class="feature-badge badge-ahead">Ahead of Syndie</span></div>
+      <div class="feature-desc">Every client in one view — active status, messages sent, reply rate, meetings booked, campaign health. Switch clients in one click.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Logging in and out of separate accounts for each client. With 5+ clients this becomes a part-time job.</div>
+    </div>
+
+    <div class="feature-card highlight">
+      <div class="feature-icon">🎨</div>
+      <div class="feature-title">White-labelling <span class="feature-badge badge-ahead">Ahead of Syndie</span></div>
+      <div class="feature-desc">Replace ReachFlow branding with your agency name, colours, and logo throughout the app. Clients see your brand, not ours.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Agencies need to look like they built the tooling. White-labelling is what turns a software subscription into a proprietary platform.</div>
+    </div>
+
+    <div class="feature-card highlight">
+      <div class="feature-icon">📊</div>
+      <div class="feature-title">One-click client reports <span class="feature-badge badge-ahead">Ahead of Syndie</span></div>
+      <div class="feature-desc">AI-written performance summaries generated from live campaign data. Shareable link, PDF export, branded header. Takes 4 seconds.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Monthly reporting takes agencies 30–60 minutes per client — copy data, write summary, build slides. This eliminates the entire process.</div>
+    </div>
+
+    <div class="feature-card highlight">
+      <div class="feature-icon">🔍</div>
+      <div class="feature-title">Review queue <span class="feature-badge badge-ahead">Ahead of Syndie</span></div>
+      <div class="feature-desc">Toggle review mode per campaign. Every outgoing message appears for approval before sending. Approve as-written, edit, or reject. Bulk approve available.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> AI-generated messages going out under a client's LinkedIn without a QA step is a liability. Review mode is the safety net.</div>
+    </div>
+
+    <div class="feature-card highlight">
+      <div class="feature-icon">📋</div>
+      <div class="feature-title">Per-client audit log <span class="feature-badge badge-new">New</span></div>
+      <div class="feature-desc">Complete activity history per client — every message sent, reply received, meeting booked, stage change. Filterable by event type, exportable to CSV.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Clients ask "what have you actually done for us?" — this gives you a timestamped answer you can export and share.</div>
+    </div>
+
+    <div class="feature-card highlight">
+      <div class="feature-icon">🚫</div>
+      <div class="feature-title">Suppression & compliance <span class="feature-badge badge-ahead">Ahead of Syndie</span></div>
+      <div class="feature-desc">Auto-detects opt-out language in replies. Adds contacts to suppression list. Disables messaging for suppressed contacts. GDPR/CAN-SPAM compliant. CSV export.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Continuing to message someone who said "stop" is a legal risk and a brand risk. Automation without compliance is a liability.</div>
+    </div>
+  </div>
+
+  <!-- AI Features -->
+  <div class="section-label">AI-powered tools</div>
+  <div class="section-title">Claude built into every workflow</div>
+  <div class="section-sub">Not AI as a feature — AI as the fabric. Every intelligent action runs through Anthropic's Claude.</div>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="feature-icon">◫</div>
+      <div class="feature-title">Reply intelligence <span class="feature-badge badge-ahead">Ahead of Syndie</span></div>
+      <div class="feature-desc">Classifies every inbound reply — Interested, Not Now, Objection, Wrong Person, Referral — with a confidence score and a specific recommended next action.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Reps misread replies and respond with the wrong message. Intent classification means every reply gets the right follow-up.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">✦</div>
+      <div class="feature-title">AI Suggest replies <span class="feature-badge badge-ahead">Ahead of Syndie</span></div>
+      <div class="feature-desc">Drafts a context-aware reply based on the full conversation thread and detected intent. Not a template — it reads the actual conversation.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Writing good follow-up replies to 50+ conversations per day is the bottleneck in any outreach operation.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">◎</div>
+      <div class="feature-title">Campaign health scores <span class="feature-badge badge-ahead">Ahead of Syndie</span></div>
+      <div class="feature-desc">0–100 health score per campaign based on reply rate, meeting conversion, sequence progress. AI diagnosis explains what's wrong and what to fix.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Knowing a campaign has a 4% reply rate doesn't tell you why. The health score + AI diagnosis does.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">✍</div>
+      <div class="feature-title">SEO & copy reviewer <span class="feature-badge badge-ahead">Ahead of Syndie</span></div>
+      <div class="feature-desc">Platform-specific copy analysis for LinkedIn posts, website content, email subjects, Twitter/X, Facebook ads, and Google ads. AI rewrites on demand.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Agencies writing content across 6 platforms need platform-specific expertise. This gives every platform's best practices on demand.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">🎯</div>
+      <div class="feature-title">Lead quality scoring <span class="feature-badge badge-new">New</span></div>
+      <div class="feature-desc">Scores each imported lead 0–100 against your campaign ICP before outreach starts. Green/amber/red badges on every lead card. Filter by score.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Sending 200 connection requests to the wrong people wastes the daily limit and tanks reply rates. Score first, send to the best.</div>
+      <div class="vs-badge">✓ Better than Syndie — they have basic filtering, we have AI-driven ICP scoring</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">✦</div>
+      <div class="feature-title">AI Coach <span class="feature-badge badge-ahead">Ahead of Syndie</span></div>
+      <div class="feature-desc">Goal-based outreach coaching. Sets a personalised action plan, tracks weekly targets, and answers questions via chat with full context of your campaigns.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> New team members or clients who don't know what good outreach looks like. The coach makes them effective faster.</div>
+    </div>
+  </div>
+
+  <!-- Lead Generation -->
+  <div class="section-label">Lead generation</div>
+  <div class="section-title">Find and score prospects without leaving ReachFlow</div>
+  <div class="section-sub">Native search eliminates the biggest workflow gap in outreach tools.</div>
+
+  <div class="feature-grid">
+    <div class="feature-card highlight">
+      <div class="feature-icon">🔍</div>
+      <div class="feature-title">Native LinkedIn search <span class="feature-badge badge-new">New</span></div>
+      <div class="feature-desc">Search LinkedIn by title, company, industry, location, and connection degree — directly inside ReachFlow. Results show as profile cards. No leaving the app, no copying URLs.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Every other tool requires going to LinkedIn, running a search, exporting a file, cleaning it, uploading it. This eliminates all of that.</div>
+      <div class="vs-badge">✓ Matches Syndie's native search — previously their biggest advantage</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">💾</div>
+      <div class="feature-title">Saved searches <span class="feature-badge badge-new">New</span></div>
+      <div class="feature-desc">Save any search filter set with a name and run it again with one click. Build a library of proven searches for different ICPs and reuse them across clients.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Rebuilding the same search filters every week for the same ICP. Saved searches turn a one-off into a repeatable process.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">⚡</div>
+      <div class="feature-title">Trigger word monitor <span class="feature-badge badge-ahead">Ahead of Syndie</span></div>
+      <div class="feature-desc">Monitors LinkedIn for people posting your target keywords in real time. "Looking for an outreach tool", "scaling our team", "we're hiring SDRs" — adds them to a warming sequence on one click.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Cold outreach ignores timing. Trigger monitoring reaches people at the exact moment they've expressed a relevant pain point publicly.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">◈</div>
+      <div class="feature-title">Social listening <span class="feature-badge badge-ahead">Ahead of Syndie</span></div>
+      <div class="feature-desc">Scans LinkedIn and Twitter/X for high-intent signals. AI drafts a contextual comment reply. One-click to add the person to a lead list.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Social selling is valuable but manual. This surfaces the signals automatically and handles the first response.</div>
+    </div>
+  </div>
+
+  <!-- UX improvements -->
+  <div class="section-label">Platform & UX</div>
+  <div class="section-title">Reliability and polish</div>
+  <div class="section-sub">The features you notice when they're missing.</div>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🔔</div>
+      <div class="feature-title">Notification centre <span class="feature-badge badge-new">New</span></div>
+      <div class="feature-desc">Bell icon in the sidebar with unread count. Dropdown shows all recent events — replies, meetings booked, stage changes, imports. Mark all read. Click to navigate.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> Checking the app to see if anything happened. Notifications bring the signal to you.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">⚠</div>
+      <div class="feature-title">Error handling <span class="feature-badge badge-new">New</span></div>
+      <div class="feature-desc">Specific error toasts for every failure mode — rate limits, connection errors, API timeouts — with actionable messages. Errors surface instead of silently failing.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> "Why didn't that send?" — when the tool fails silently there's no way to know what happened or fix it.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">⏳</div>
+      <div class="feature-title">Skeleton loaders <span class="feature-badge badge-new">New</span></div>
+      <div class="feature-desc">Animated loading states on Dashboard and Lead Lists while data fetches from Supabase. No more empty-state flash or missing data on slow connections.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> A blank dashboard on first load looks broken. Skeleton loaders communicate that data is coming.</div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">🚀</div>
+      <div class="feature-title">Welcome onboarding <span class="feature-badge badge-new">New</span></div>
+      <div class="feature-desc">5-step guided walkthrough for first-time users. Only shows once. Explains what to do first — add a client, import leads, build a sequence — in plain English.</div>
+      <div class="pain-point"><strong>Pain solved:</strong> New team members opening the app to an empty dashboard with no guidance. Onboarding reduces time-to-first-value.</div>
+    </div>
+  </div>
+
+  <!-- Comparison table -->
+  <div class="section-label">Head-to-head</div>
+  <div class="section-title">ReachFlow vs Syndie.io</div>
+  <div class="section-sub">Feature-by-feature comparison for agencies evaluating both tools.</div>
+
+  <div class="comparison">
+    <table>
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>Syndie.io</th>
+          <th>ReachFlow</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="cat" colspan="3">Core LinkedIn</td></tr>
+        <tr><td>Profile visits</td><td>✓</td><td>✓</td></tr>
+        <tr><td>Post likes</td><td>✓</td><td>✓</td></tr>
+        <tr><td>AI-written post comments</td><td>⚬ Templates only</td><td>✓ Reads actual post</td></tr>
+        <tr><td>Connection requests</td><td>✓</td><td>✓</td></tr>
+        <tr><td>Multi-step sequences</td><td>✓</td><td>✓</td></tr>
+        <tr><td>Conditional branching</td><td>✓</td><td>✓</td></tr>
+        <tr><td>A/B testing</td><td>✓</td><td>✓</td></tr>
+        <tr><td>Human-like pacing + daily limits</td><td>✓</td><td>✓</td></tr>
+
+        <tr><td class="cat" colspan="3">Agency tools</td></tr>
+        <tr><td>Multi-client dashboard</td><td>✕</td><td>✓</td></tr>
+        <tr><td>White-labelling</td><td>✕</td><td>✓</td></tr>
+        <tr><td>One-click client reports</td><td>✕</td><td>✓</td></tr>
+        <tr><td>Review queue (approve before send)</td><td>✕</td><td>✓</td></tr>
+        <tr><td>Per-client audit log</td><td>✕</td><td>✓</td></tr>
+        <tr><td>GDPR suppression list</td><td>✕</td><td>✓</td></tr>
+
+        <tr><td class="cat" colspan="3">AI</td></tr>
+        <tr><td>Reply intent classification</td><td>✕</td><td>✓</td></tr>
+        <tr><td>AI-suggested replies</td><td>✕</td><td>✓</td></tr>
+        <tr><td>Campaign health scores + AI diagnosis</td><td>✕</td><td>✓</td></tr>
+        <tr><td>SEO & copy reviewer</td><td>✕</td><td>✓</td></tr>
+        <tr><td>Lead quality scoring vs ICP</td><td>⚬ Basic filters</td><td>✓ AI-scored 0–100</td></tr>
+        <tr><td>AI outreach coach</td><td>✕</td><td>✓</td></tr>
+
+        <tr><td class="cat" colspan="3">Lead generation</td></tr>
+        <tr><td>Native LinkedIn search</td><td>✓</td><td>✓</td></tr>
+        <tr><td>Saved search filters</td><td>✕</td><td>✓</td></tr>
+        <tr><td>Trigger word monitoring</td><td>✕</td><td>✓</td></tr>
+        <tr><td>Social listening feed</td><td>✕</td><td>✓</td></tr>
+
+        <tr><td class="cat" colspan="3">CRM & integrations</td></tr>
+        <tr><td>HubSpot / Salesforce sync</td><td>✓</td><td>Coming soon</td></tr>
+        <tr><td>Multiple LinkedIn accounts per client</td><td>✓</td><td>Coming soon</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Tech stack -->
+  <div class="section-label">Technology stack</div>
+  <div class="section-title">What powers ReachFlow</div>
+  <div class="section-sub">Every service we use, what it does, and why we chose it.</div>
+
+  <div class="stack-grid">
+    <div class="stack-card">
+      <div class="stack-icon" style="background:rgba(45,206,152,.12);color:var(--accent)">⚛</div>
+      <div>
+        <div class="stack-name">React + Vite</div>
+        <div class="stack-role">Frontend framework</div>
+        <div class="stack-desc">The entire UI — 5,000+ lines of component code. Vite handles bundling and hot reload during development. Deployed as a static site to Vercel.</div>
+      </div>
+    </div>
+
+    <div class="stack-card">
+      <div class="stack-icon" style="background:rgba(59,130,246,.12);color:var(--blue)">▲</div>
+      <div>
+        <div class="stack-name">Vercel</div>
+        <div class="stack-role">Hosting + serverless functions</div>
+        <div class="stack-desc">Hosts the React app and runs the API functions (LinkedIn, Stripe, scheduler). Auto-deploys from GitHub on every push. Free tier covers agency-level usage.</div>
+      </div>
+    </div>
+
+    <div class="stack-card">
+      <div class="stack-icon" style="background:rgba(62,207,142,.12);color:#3ecf8e">🗄</div>
+      <div>
+        <div class="stack-name">Supabase</div>
+        <div class="stack-role">Database + authentication</div>
+        <div class="stack-desc">PostgreSQL database with row-level security — each agency only sees their own data. Handles login/signup, real-time message sync, and all data persistence. Replaces localStorage completely.</div>
+      </div>
+    </div>
+
+    <div class="stack-card">
+      <div class="stack-icon" style="background:rgba(16,94,172,.12);color:#105eac">in</div>
+      <div>
+        <div class="stack-name">Unipile</div>
+        <div class="stack-role">LinkedIn API</div>
+        <div class="stack-desc">The layer that connects LinkedIn accounts via OAuth and executes actions safely — connection requests, messages, profile visits, post engagement. Handles rate limiting and account safety. ~$150/mo.</div>
+      </div>
+    </div>
+
+    <div class="stack-card">
+      <div class="stack-icon" style="background:rgba(255,150,70,.12);color:#ff9646">✉</div>
+      <div>
+        <div class="stack-name">Resend</div>
+        <div class="stack-role">Email notifications</div>
+        <div class="stack-desc">Sends reply notifications and daily digests. Simple API, excellent deliverability. Free tier covers 3,000 emails/month which is more than enough for an agency's internal notifications.</div>
+      </div>
+    </div>
+
+    <div class="stack-card">
+      <div class="stack-icon" style="background:rgba(99,91,255,.12);color:#635bff">$</div>
+      <div>
+        <div class="stack-name">Stripe</div>
+        <div class="stack-role">Billing (ready, not active)</div>
+        <div class="stack-desc">Subscription billing infrastructure is fully built — products, checkout, webhook handler. Not activated for internal use but ready to flip on for external clients immediately.</div>
+      </div>
+    </div>
+
+    <div class="stack-card">
+      <div class="stack-icon" style="background:rgba(204,130,76,.12);color:#cc824c">✦</div>
+      <div>
+        <div class="stack-name">Anthropic Claude</div>
+        <div class="stack-role">AI across all features</div>
+        <div class="stack-desc">Powers reply intent classification, AI-suggested replies, campaign health diagnosis, client reports, SEO copy reviewer, lead quality scoring, social comment drafting, and AI coach. Claude Sonnet 4.</div>
+      </div>
+    </div>
+
+    <div class="stack-card">
+      <div class="stack-icon" style="background:rgba(59,130,246,.12);color:var(--blue)">⏰</div>
+      <div>
+        <div class="stack-name">cron-job.org</div>
+        <div class="stack-role">Campaign scheduler</div>
+        <div class="stack-desc">Free service that calls the campaign scheduler every hour. Triggers the Vercel function that checks what messages are due, respects send windows and daily limits, and fires via Unipile.</div>
+      </div>
+    </div>
+
+    <div class="stack-card">
+      <div class="stack-icon" style="background:rgba(248,129,74,.12);color:#f8814a">🐙</div>
+      <div>
+        <div class="stack-name">GitHub</div>
+        <div class="stack-role">Version control</div>
+        <div class="stack-desc">Private repo at github.com/mikelanghans/reachflow. Every push to main triggers an automatic Vercel deployment. Full history of every code change.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-section">
+    <h2>Ready to run your first campaign?</h2>
+    <p>Add a client, import leads, build a sequence — your first real connection request can fire today.</p>
+    <a href="/" class="cta-btn">Open ReachFlow →</a>
+  </div>
+
+</div>
+
+<footer style="border-top:1px solid var(--border);padding:2rem;text-align:center;color:var(--muted);font-size:13px">
+  ReachFlow · Built by <strong style="color:var(--text)">Syncopated Dynamics LLC</strong> · Internal use
+</footer>
+
+</body>
+</html>
