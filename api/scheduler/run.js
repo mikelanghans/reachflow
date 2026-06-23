@@ -32,14 +32,7 @@ export default async function handler(req, res) {
   }
 
   console.log("Scheduler run started:", new Date().toISOString());
-  const results = {
-    processed: 0,
-    sent: 0,
-    social_actions: 0,
-    queued: 0,
-    skipped: 0,
-    errors: [],
-  };
+  const results = { processed: 0, sent: 0, social_actions: 0, queued: 0, skipped: 0, errors: [] };
 
   try {
     // 1. Get all active agencies with their settings
@@ -656,48 +649,110 @@ async function performSocialAction({ accountId, lead, node }) {
         break;
 
       case "follow_profile":
-        response = await fetch(`${base}/users/${lead.linkedin_urn}/follow`, {
+        // There is no dedicated "follow a profile" endpoint in Unipile's
+        // documented API (confirmed: the old /users/{urn}/follow path
+        // 404'd in production). Following is done via Unipile's "Get raw
+        // data" passthrough route, which replays a LinkedIn Voyager API
+        // call on the user's behalf. See:
+        // https://developer.unipile.com/docs/get-raw-data-example
+        response = await fetch(`${base}/linkedin`, {
           method: "POST",
           headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
-          body: JSON.stringify({ account_id: accountId }),
+          body: JSON.stringify({
+            account_id: accountId,
+            method: "POST",
+            request_url: `https://www.linkedin.com/voyager/api/feed/dash/followingStates/urn:li:fsd_followingState:urn:li:fsd_profile:${lead.linkedin_urn}`,
+            body: { patch: { $set: { following: true } } },
+            encoding: false,
+          }),
         });
         break;
 
       case "follow_company":
+        // Same raw-passthrough mechanism as follow_profile, targeting a
+        // company URN instead of a profile URN. NOTE: this is inferred by
+        // analogy with Unipile's documented profile-follow example rather
+        // than confirmed against an explicit company-follow example —
+        // watch the logs the first few times this runs.
         if (!lead.company_urn) {
           console.warn(
             `Lead ${lead.id} has no company_urn — skipping follow_company`,
           );
           return false;
         }
-        response = await fetch(`${base}/companies/${lead.company_urn}/follow`, {
+        response = await fetch(`${base}/linkedin`, {
           method: "POST",
           headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
-          body: JSON.stringify({ account_id: accountId }),
+          body: JSON.stringify({
+            account_id: accountId,
+            method: "POST",
+            request_url: `https://www.linkedin.com/voyager/api/feed/dash/followingStates/urn:li:fsd_followingState:urn:li:fsd_company:${lead.company_urn}`,
+            body: { patch: { $set: { following: true } } },
+            encoding: false,
+          }),
         });
         break;
 
       case "like_post":
+        // Confirmed against https://developer.unipile.com/reference/postscontroller_addpostreaction —
+        // this is POST /posts/reaction with post_id/account_id/reaction_type
+        // in the BODY, not a /posts/{id}/reaction path. The old code hit a
+        // path that doesn't exist and used the wrong field name (`reaction`
+        // instead of `reaction_type`).
         if (!lead.last_post_urn) {
           console.warn(
             `Lead ${lead.id} has no last_post_urn — skipping like_post`,
           );
           return false;
         }
-        response = await fetch(`${base}/posts/${lead.last_post_urn}/reaction`, {
+        response = await fetch(`${base}/posts/reaction`, {
           method: "POST",
           headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
-          body: JSON.stringify({ account_id: accountId, reaction: "like" }),
+          body: JSON.stringify({
+            account_id: accountId,
+            post_id: lead.last_post_urn,
+            reaction_type: "like",
+          }),
         });
         break;
 
-      case "withdraw_request":
-        response = await fetch(`${base}/users/invite/${lead.linkedin_urn}`, {
-          method: "DELETE",
-          headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
-          body: JSON.stringify({ account_id: accountId }),
-        });
+      case "withdraw_request": {
+        // Confirmed against https://developer.unipile.com/reference/userscontroller_cancelinvitation —
+        // cancelling needs the invitation's own id, not the recipient's
+        // profile URN, so look up the pending sent invitation first. Field
+        // names on the invitation object aren't confirmed from docs alone,
+        // so we match defensively against several plausible names and log
+        // the raw shape if none match (check Vercel logs to tighten this
+        // up once we see a real example).
+        const sentRes = await fetch(
+          `${base}/users/invite/sent?account_id=${accountId}&limit=250`,
+          { headers: { "X-API-KEY": apiKey } },
+        );
+        if (!sentRes.ok) {
+          response = sentRes;
+          break;
+        }
+        const sentData = await sentRes.json();
+        const items = sentData.items || sentData.object?.items || [];
+        const invite = items.find((inv) =>
+          [
+            inv.provider_id, inv.user_id, inv.invited_user_id,
+            inv.recipient_id, inv.recipient_provider_id, inv.profile_id,
+          ].includes(lead.linkedin_urn),
+        );
+        if (!invite) {
+          console.warn(
+            `No pending sent invitation found for lead ${lead.id} (urn ${lead.linkedin_urn}) — may already be withdrawn/accepted. Raw items for reference:`,
+            JSON.stringify(items.slice(0, 3)),
+          );
+          return false;
+        }
+        response = await fetch(
+          `${base}/users/invite/sent/${invite.id}?account_id=${accountId}`,
+          { method: "DELETE", headers: { "X-API-KEY": apiKey } },
+        );
         break;
+      }
 
       case "comment_post":
       case "ai_convo":
@@ -715,7 +770,9 @@ async function performSocialAction({ accountId, lead, node }) {
     }
 
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
+      const rawErr = await response.text().catch(() => "");
+      let err = {};
+      try { err = JSON.parse(rawErr); } catch { err = { message: rawErr.slice(0, 300) }; }
       console.error(`Unipile ${node.type} error:`, err);
       return false;
     }
