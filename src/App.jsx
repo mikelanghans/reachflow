@@ -2348,6 +2348,8 @@ function Leads({ leads, setLeads, updateLeadsBulk, deleteLeadsBulk, logActivity,
     }
   };
   const [showAssignMenu, setShowAssignMenu] = useState(false);
+  const [assignMenuUpward, setAssignMenuUpward] = useState(false);
+  const assignBtnRef = useRef(null);
   const bulkAssignCampaign = async (campaignId, campaignName) => {
     const ids = [...selected];
     setLeads(ls => ls.map(l => selected.has(l.id) ? { ...l, campaign: campaignId, campaign_id: campaignId } : l)); // optimistic
@@ -2423,11 +2425,18 @@ function Leads({ leads, setLeads, updateLeadsBulk, deleteLeadsBulk, logActivity,
               </button>
             ))}
             <div style={{ position: "relative" }}>
-              <button onClick={() => setShowAssignMenu(o => !o)} style={{ background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}44`, borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+              <button ref={assignBtnRef} onClick={() => {
+                if (!showAssignMenu && assignBtnRef.current) {
+                  const rect = assignBtnRef.current.getBoundingClientRect();
+                  const estimatedHeight = Math.min(280, campaigns.length * 36 + 50);
+                  setAssignMenuUpward(window.innerHeight - rect.bottom < estimatedHeight && rect.top > estimatedHeight);
+                }
+                setShowAssignMenu(o => !o);
+              }} style={{ background: T.accentBg, color: T.accent, border: `1px solid ${T.accent}44`, borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
                 + Assign to campaign ▾
               </button>
               {showAssignMenu && (
-                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, padding: 6, minWidth: 220, boxShadow: "0 8px 24px rgba(0,0,0,0.35)", zIndex: 20, maxHeight: 280, overflowY: "auto" }}>
+                <div style={{ position: "absolute", ...(assignMenuUpward ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }), left: 0, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, padding: 6, minWidth: 220, boxShadow: "0 8px 24px rgba(0,0,0,0.35)", zIndex: 20, maxHeight: 280, overflowY: "auto" }}>
                   {campaigns.length === 0 ? (
                     <div style={{ color: T.muted, fontSize: 12, padding: "8px 10px" }}>No campaigns yet — create one first.</div>
                   ) : campaigns.map(c => (
