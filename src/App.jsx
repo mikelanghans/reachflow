@@ -2417,7 +2417,7 @@ function Leads({ leads, setLeads, updateLeadsBulk, deleteLeadsBulk, logActivity,
 
       {/* Bulk action bar — sticky so it stays visible while scrolling through a long list */}
       {selected.size > 0 && (
-        <div style={{ position: "sticky", top: 12, zIndex: 30, background: T.surface, border: `1px solid ${T.accent}`, borderRadius: 10, padding: "0.75rem 1rem", marginBottom: "0.875rem", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 6px 20px rgba(0,0,0,0.35)" }}>
+        <div style={{ position: "fixed", top: 20, left: 256, right: 36, zIndex: 100, background: T.surface, border: `1px solid ${T.accent}`, borderRadius: 10, padding: "0.75rem 1rem", display: "flex", alignItems: "center", gap: 12, boxShadow: "0 6px 20px rgba(0,0,0,0.35)" }}>
           <span style={{ color: T.accent, fontSize: 13, fontWeight: 700 }}>{selected.size} selected</span>
           <div style={{ flex: 1, display: "flex", gap: 8, position: "relative", flexWrap: "wrap" }}>
             <button onClick={bulkDelete} style={{ background: T.red + "22", color: T.red, border: `1px solid ${T.red}44`, borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>✕ Delete</button>
