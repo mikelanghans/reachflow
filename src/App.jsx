@@ -95,7 +95,7 @@ const STATUS_LABEL = { active: "Active", paused: "Paused", pending: "Pending", c
 function Badge({ status }) {
   const c = STATUS_COLOR[status] || T.muted;
   return (
-    <span style={{ background: c + "22", color: c, border: `1px solid ${c}40`, fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
+    <span style={{ background: c + "22", color: c, border: `1px solid ${c}40`, fontSize: 12.5, fontWeight: 700, padding: "3px 9px", borderRadius: 4, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
       {STATUS_LABEL[status] || status}
     </span>
   );
@@ -2582,7 +2582,7 @@ function Leads({ leads, setLeads, updateLeadsBulk, deleteLeadsBulk, logActivity,
                 </td>
                 <td style={td}>
                   {lead.sequenceStatus === "needs_review" ? (
-                    <span title={lead.reviewReason || "Needs review before this lead can run"} style={{ background: "rgba(210,153,34,0.15)", color: T.yellow, fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: "0.04em", whiteSpace: "nowrap", cursor: "help" }}>
+                    <span title={lead.reviewReason || "Needs review before this lead can run"} style={{ background: "rgba(210,153,34,0.15)", color: T.yellow, border: `1px solid ${T.yellow}40`, fontSize: 12.5, fontWeight: 700, padding: "3px 9px", borderRadius: 4, letterSpacing: "0.04em", whiteSpace: "nowrap", cursor: "help" }}>
                       ⚠ Needs Review
                     </span>
                   ) : <Badge status={lead.status} />}
