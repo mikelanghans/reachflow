@@ -971,17 +971,45 @@ async function performSocialAction({ accountId, lead, node, voiceProfile }) {
         });
         break;
 
-      case "follow_company":
+      case "follow_company": {
         // Same raw-passthrough mechanism as follow_profile, targeting a
-        // company URN instead of a profile URN. NOTE: this is inferred by
-        // analogy with Unipile's documented profile-follow example rather
-        // than confirmed against an explicit company-follow example —
-        // watch the logs the first few times this runs.
-        if (!lead.company_urn) {
-          console.warn(
-            `Lead ${lead.id} has no company_urn — skipping follow_company`,
+        // company URN instead of a profile URN. Like last_post_urn, nothing
+        // anywhere populates company_urn ahead of time, so resolve it
+        // just-in-time from the lead's company NAME (which we do have) via
+        // https://developer.unipile.com/reference/linkedincontroller_getcompanyprofile —
+        // confirmed this accepts a plain company name as the identifier and
+        // returns the company's id, which matches the numeric fsd_company
+        // URN format the follow passthrough below expects.
+        let companyUrn = lead.company_urn;
+        if (!companyUrn) {
+          if (!lead.company?.trim()) {
+            console.warn(
+              `Lead ${lead.id} has no company name on file — skipping follow_company`,
+            );
+            return false;
+          }
+          const companyRes = await fetch(
+            `${base}/linkedin/company/${encodeURIComponent(lead.company.trim())}?account_id=${accountId}`,
+            { headers: { "X-API-KEY": apiKey } },
           );
-          return false;
+          if (!companyRes.ok) {
+            if (companyRes.status === 404) {
+              console.warn(
+                `Lead ${lead.id}: company "${lead.company}" not found on LinkedIn — skipping follow_company`,
+              );
+              return false;
+            }
+            response = companyRes;
+            break;
+          }
+          const companyData = await companyRes.json();
+          companyUrn = companyData.id;
+          if (!companyUrn) {
+            console.warn(
+              `Lead ${lead.id}: company lookup for "${lead.company}" returned no id — skipping follow_company`,
+            );
+            return false;
+          }
         }
         response = await fetch(`${base}/linkedin`, {
           method: "POST",
@@ -989,12 +1017,13 @@ async function performSocialAction({ accountId, lead, node, voiceProfile }) {
           body: JSON.stringify({
             account_id: accountId,
             method: "POST",
-            request_url: `https://www.linkedin.com/voyager/api/feed/dash/followingStates/urn:li:fsd_followingState:urn:li:fsd_company:${lead.company_urn}`,
+            request_url: `https://www.linkedin.com/voyager/api/feed/dash/followingStates/urn:li:fsd_followingState:urn:li:fsd_company:${companyUrn}`,
             body: { patch: { $set: { following: true } } },
             encoding: false,
           }),
         });
         break;
+      }
 
       case "like_post": {
         // Confirmed against https://developer.unipile.com/reference/postscontroller_addpostreaction —

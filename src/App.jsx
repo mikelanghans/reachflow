@@ -1554,6 +1554,7 @@ function ImportModal({ onClose, onImport, clients = [] }) {
   const [csvDragging, setCsvDragging] = useState(false);
   const [csvFile, setCsvFile] = useState(null);
   const [csvError, setCsvError] = useState(null);
+  const [csvEnriching, setCsvEnriching] = useState(false);
   const csvInputRef = useRef(null);
   const [listName, setListName] = useState("");
   const [importing, setImporting] = useState(false);
@@ -1726,7 +1727,7 @@ function ImportModal({ onClose, onImport, clients = [] }) {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: (result) => {
+      complete: async (result) => {
         if (result.errors?.length) {
           setCsvError(result.errors[0].message || "Couldn't parse this file");
           setCsvFile(null);
@@ -1765,6 +1766,38 @@ function ImportModal({ onClose, onImport, clients = [] }) {
           };
         });
         setRows(parsed);
+
+        // Resolve a real linkedin_urn for any row that has a LinkedIn URL —
+        // without this, CSV-imported leads would import with a clean
+        // linkedin_url column and still never be actionable by the
+        // scheduler, the same failure mode the original "Jeffry Normal"
+        // test lead hit. Reuses the same per-profile lookup as "Add by URL".
+        const toEnrich = parsed.filter(r => r.ok && r.linkedin_url);
+        const client = connectedClients.find(c => c.id === searchClientId);
+        if (toEnrich.length > 0 && client) {
+          setCsvEnriching(true);
+          try {
+            const enriched = await Promise.all(toEnrich.map(async (row) => {
+              try {
+                const res = await fetch('/api/linkedin/lookup', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ linkedin_url: row.linkedin_url, account_id: client.unipileAccountId }),
+                });
+                const data = await res.json();
+                return data.ok ? { id: row.id, linkedin_urn: data.profile.linkedin_urn } : { id: row.id, linkedin_urn: null };
+              } catch {
+                return { id: row.id, linkedin_urn: null };
+              }
+            }));
+            setRows(current => current.map(row => {
+              const match = enriched.find(e => e.id === row.id);
+              return match ? { ...row, linkedin_urn: match.linkedin_urn } : row;
+            }));
+          } finally {
+            setCsvEnriching(false);
+          }
+        }
       },
       error: (err) => {
         setCsvError(err.message || "Couldn't parse this file");
@@ -2069,7 +2102,7 @@ function ImportModal({ onClose, onImport, clients = [] }) {
                     <div style={{ fontSize: 32, marginBottom: 8 }}>📄</div>
                     <div style={{ color: T.text, fontWeight: 600, marginBottom: 4 }}>{csvFile.name}</div>
                     <div style={{ color: T.muted, fontSize: 12 }}>
-                      {csvError ? <span style={{ color: T.red }}>{csvError}</span> : `${rows.length} row${rows.length !== 1 ? "s" : ""} found`} ·{" "}
+                      {csvError ? <span style={{ color: T.red }}>{csvError}</span> : csvEnriching ? <span style={{ color: T.accent }}>{rows.length} rows found · resolving LinkedIn profiles…</span> : `${rows.length} row${rows.length !== 1 ? "s" : ""} found`} ·{" "}
                       <span style={{ color: T.accent, cursor: "pointer" }} onClick={e => { e.stopPropagation(); setCsvFile(null); setRows([]); setCsvError(null); }}>Remove</span>
                     </div>
                   </>
@@ -2101,7 +2134,7 @@ function ImportModal({ onClose, onImport, clients = [] }) {
               <button onClick={startLookup} disabled={!hasProfileUrls || connectedClients.length === 0 || lookupRunning} style={{ background: (hasProfileUrls && connectedClients.length > 0) ? T.accent : T.faint, color: (hasProfileUrls && connectedClients.length > 0) ? "#0d1117" : T.muted, border: "none", borderRadius: 7, padding: "8px 18px", cursor: (hasProfileUrls && connectedClients.length > 0) ? "pointer" : "default", fontSize: 13, fontWeight: 700 }}>Look up profiles →</button>
             )}
             {stage === "input" && tab === "csv" && (
-              <button onClick={() => rows.length > 0 && setStage("preview")} disabled={!csvFile || !!csvError || rows.length === 0} style={{ background: (csvFile && !csvError && rows.length > 0) ? T.accent : T.faint, color: (csvFile && !csvError && rows.length > 0) ? "#0d1117" : T.muted, border: "none", borderRadius: 7, padding: "8px 18px", cursor: (csvFile && !csvError && rows.length > 0) ? "pointer" : "default", fontSize: 13, fontWeight: 700 }}>Preview Import →</button>
+              <button onClick={() => rows.length > 0 && setStage("preview")} disabled={!csvFile || !!csvError || rows.length === 0 || csvEnriching} style={{ background: (csvFile && !csvError && rows.length > 0 && !csvEnriching) ? T.accent : T.faint, color: (csvFile && !csvError && rows.length > 0 && !csvEnriching) ? "#0d1117" : T.muted, border: "none", borderRadius: 7, padding: "8px 18px", cursor: (csvFile && !csvError && rows.length > 0 && !csvEnriching) ? "pointer" : "default", fontSize: 13, fontWeight: 700 }}>{csvEnriching ? "Resolving profiles…" : "Preview Import →"}</button>
             )}
             {stage === "preview" && (
               <button onClick={() => {
@@ -2680,7 +2713,7 @@ function Analytics() {
           ))}
         </div>
         <div style={{ marginTop: "1rem", background: T.surface, borderRadius: 8, padding: "0.75rem 1rem", color: T.muted, fontSize: 12, lineHeight: 1.6 }}>
-          <span style={{ color: T.accent, fontWeight: 700 }}>Recommendation:</span> Your best reply rates come on <strong style={{ color: T.text }}>Tuesday and Thursday, 9am–12pm</strong> in the prospect's local timezone. ReachFlow is currently scheduling all outreach within this window. <span style={{ color: T.accent, cursor: "pointer" }}>Adjust in Settings →</span>
+          <span style={{ color: T.accent, fontWeight: 700 }}>Recommendation:</span> Your best reply rates come on <strong style={{ color: T.text }}>Tuesday and Thursday, 9am–12pm</strong> in your own local time. ReachFlow is currently scheduling all outreach within this window. <span style={{ color: T.accent, cursor: "pointer" }}>Adjust in Settings →</span>
         </div>
       </div>
     </div>
@@ -4574,7 +4607,7 @@ function Settings({ brand = DEFAULT_BRAND, onBrandChange, voiceProfile = DEFAULT
         <div style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 8, padding: "10px 12px", display: "flex", gap: 10 }}>
           <span style={{ color: T.accent, fontSize: 14 }}>💡</span>
           <div style={{ color: T.muted, fontSize: 12, lineHeight: 1.6 }}>
-            <strong style={{ color: T.text }}>Timezone-aware:</strong> ReachFlow detects each prospect's timezone from their LinkedIn location and sends within your window in <em>their</em> local time — so an 8am message lands at 8am whether they're in New York or Berlin.
+            <strong style={{ color: T.text }}>Timezone-aware:</strong> this send window is enforced in <em>your</em> agency's timezone (not server time), so "8:00–17:00" actually means your real local business hours. Per-prospect timezone detection — sending at 8am their time regardless of where they are — isn't built yet; everyone in a campaign is currently scheduled against this one window.
           </div>
         </div>
       </div>
@@ -5368,7 +5401,7 @@ Every branch (yes/no, a/b) must end with an "end" node. ids must be unique integ
                     <div style={{ background: T.accentDim, border: `1px solid ${T.accent}33`, borderRadius: 6, padding: "7px 10px", marginTop: 6, display: "flex", gap: 7 }}>
                       <span style={{ color: T.accent, fontSize: 11, flexShrink: 0 }}>⏱</span>
                       <div style={{ color: T.muted, fontSize: 11, lineHeight: 1.5 }}>
-                        <strong style={{ color: T.accent }}>Smart timing on.</strong> This message will send on day {editNode.delay} within <strong style={{ color: T.text }}>Tue–Thu, 9–12am</strong> in each prospect's timezone. Edit in Settings → Smart send timing.
+                        <strong style={{ color: T.accent }}>Smart timing on.</strong> This message will send on day {editNode.delay} within <strong style={{ color: T.text }}>Tue–Thu, 9–12am</strong> in your agency's timezone. Edit in Settings → Smart send timing.
                       </div>
                     </div>
                   </div>
