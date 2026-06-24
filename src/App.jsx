@@ -4117,7 +4117,7 @@ function Settings({ brand = DEFAULT_BRAND, onBrandChange, voiceProfile = DEFAULT
         const r = data.results;
         setGhlSuccess(direction === "push"
           ? `Synced ${r.synced} lead${r.synced !== 1 ? "s" : ""} to GoHighLevel${r.failed ? ` (${r.failed} failed)` : ""}`
-          : `Imported ${r.imported} contact${r.imported !== 1 ? "s" : ""} from GoHighLevel${r.failed ? ` (${r.failed} failed)` : ""}`);
+          : `Imported ${r.imported} contact${r.imported !== 1 ? "s" : ""} from GoHighLevel${r.updated ? `, refreshed ${r.updated} existing` : ""}${r.failed ? ` (${r.failed} failed)` : ""}`);
       } else {
         setGhlError(data.error || "Sync failed");
       }

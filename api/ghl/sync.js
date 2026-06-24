@@ -151,6 +151,8 @@ async function pullContactsFromGhl(client, ghlHeaders, req) {
   const contacts = contactsData.contacts || [];
   let imported = 0, failed = 0;
 
+  let updated = 0;
+
   for (const contact of contacts) {
     try {
       const { data: existing } = await supabase
@@ -159,10 +161,28 @@ async function pullContactsFromGhl(client, ghlHeaders, req) {
         .eq("agency_id", client.agency_id)
         .eq("ghl_contact_id", contact.id)
         .maybeSingle();
-      if (existing) continue; // already imported, not a failure — just skip
 
-      const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim() || contact.name || "";
-      const company = contact.companyName || "";
+      const nameNow = [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim() || contact.name || "";
+      const companyNow = contact.companyName || "";
+
+      if (existing) {
+        // Re-pulling a contact we already imported: refresh basic metadata
+        // only. Deliberately never touch sequence_status/current_step/
+        // step_entered_at/linkedin_urn here — this contact may be mid-way
+        // through an active sequence, and a routine metadata refresh should
+        // never reset or reroute that.
+        if (nameNow || companyNow) {
+          await supabase.from("leads").update({
+            ...(nameNow ? { name: nameNow } : {}),
+            ...(companyNow ? { company: companyNow } : {}),
+          }).eq("id", existing.id);
+          updated++;
+        }
+        continue;
+      }
+
+      const name = nameNow;
+      const company = companyNow;
 
       let linkedinUrl = null;
       if (linkedinFieldId && Array.isArray(contact.customFields)) {
@@ -206,6 +226,44 @@ async function pullContactsFromGhl(client, ghlHeaders, req) {
         reviewReason = "No LinkedIn URL field and no name to search with";
       }
 
+      // Cross-source dedup: this same real person might already exist as a
+      // lead imported via Search LinkedIn, Add by URL, or CSV — ghl_contact_id
+      // alone can't catch that, since this is the first time GHL has sent
+      // this particular contact. Prefer matching on linkedin_urn (reliable);
+      // fall back to an exact, case-insensitive name+company match only when
+      // unambiguous (exactly one hit) — ambiguous matches create a new lead
+      // rather than risk merging two different people.
+      let dedupMatchId = null;
+      if (linkedinUrn) {
+        const { data: byUrn } = await supabase
+          .from("leads")
+          .select("id")
+          .eq("agency_id", client.agency_id)
+          .eq("linkedin_urn", linkedinUrn)
+          .limit(1)
+          .maybeSingle();
+        if (byUrn) dedupMatchId = byUrn.id;
+      }
+      if (!dedupMatchId && name) {
+        const { data: byName } = await supabase
+          .from("leads")
+          .select("id, name, company")
+          .eq("agency_id", client.agency_id)
+          .ilike("name", name)
+          .is("ghl_contact_id", null);
+        const exactMatches = (byName || []).filter(
+          (l) => (l.company || "").trim().toLowerCase() === company.trim().toLowerCase(),
+        );
+        if (exactMatches.length === 1) dedupMatchId = exactMatches[0].id;
+      }
+
+      if (dedupMatchId) {
+        // Same person, different source — link rather than duplicate.
+        await supabase.from("leads").update({ ghl_contact_id: contact.id }).eq("id", dedupMatchId);
+        imported++; // successfully processed, just merged into an existing record instead of a new row
+        continue;
+      }
+
       const { error: insertErr } = await supabase.from("leads").insert({
         agency_id: client.agency_id,
         name: name || "(unknown — from GHL)",
@@ -226,7 +284,7 @@ async function pullContactsFromGhl(client, ghlHeaders, req) {
       failed++;
     }
   }
-  return { imported, failed };
+  return { imported, failed, updated };
 }
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
