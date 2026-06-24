@@ -2186,11 +2186,27 @@ function BookmarkletSetup({ onDismiss }) {
       {step === 1 && (
         <div>
           <div style={{ color: T.muted, fontSize: 13, lineHeight: 1.7, marginBottom: "1.25rem" }}>
-            Drag the button below up to your browser's bookmarks toolbar. If you don't see the toolbar, press <kbd style={{ background: T.faint, color: T.text, padding: "1px 6px", borderRadius: 4, fontSize: 11 }}>Ctrl+Shift+B</kbd> (Windows) or <kbd style={{ background: T.faint, color: T.text, padding: "1px 6px", borderRadius: 4, fontSize: 11 }}>⌘+Shift+B</kbd> (Mac) to show it.
+            This is the real bookmarklet — drag it up into your browser's own bookmarks toolbar (the actual one in your browser, above this page). If you don't see your bookmarks toolbar, press <kbd style={{ background: T.faint, color: T.text, padding: "1px 6px", borderRadius: 4, fontSize: 11 }}>Ctrl+Shift+B</kbd> (Windows) or <kbd style={{ background: T.faint, color: T.text, padding: "1px 6px", borderRadius: 4, fontSize: 11 }}>⌘+Shift+B</kbd> (Mac) to show it first.
           </div>
 
-          {/* Visual browser mockup */}
-          <div style={{ background: "#1a1a2e", borderRadius: 10, overflow: "hidden", marginBottom: "1.25rem", border: `1px solid ${T.border}` }}>
+          {/* The actual draggable bookmarklet — front and center, not buried after the illustration */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, background: T.accentDim, border: `1.5px dashed ${T.accent}66`, borderRadius: 12, padding: "1.5rem 1rem", marginBottom: "1.25rem" }}>
+            <div style={{ color: T.accent, fontSize: 20 }}>⬆</div>
+            <a
+              href={BOOKMARKLET_CODE}
+              draggable
+              onDragStart={e => { e.dataTransfer.setData("text/plain", BOOKMARKLET_CODE); }}
+              onDragEnd={() => setDragged(true)}
+              onClick={e => e.preventDefault()}
+              style={{ background: T.accent, color: "#0d1117", borderRadius: 8, padding: "12px 22px", fontSize: 14, fontWeight: 700, textDecoration: "none", cursor: "grab", display: "flex", alignItems: "center", gap: 7, userSelect: "none", boxShadow: "0 4px 14px rgba(45,206,152,0.3)" }}>
+              <span>🔖</span> Import to ReachFlow
+            </a>
+            <div style={{ color: T.muted, fontSize: 12, textAlign: "center" }}>↑ Drag this button up to your bookmarks bar</div>
+          </div>
+
+          <div style={{ color: T.faint, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Example — what it'll look like once added</div>
+          {/* Visual browser mockup — illustrative only, not something to interact with */}
+          <div style={{ background: "#1a1a2e", borderRadius: 10, overflow: "hidden", marginBottom: "1.25rem", border: `1px solid ${T.border}`, opacity: 0.85 }}>
             {/* Browser chrome */}
             <div style={{ background: "#0d0d1a", padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ display: "flex", gap: 5 }}>
@@ -2204,12 +2220,8 @@ function BookmarkletSetup({ onDismiss }) {
               <span style={{ color: "#555", fontSize: 11 }}>Gmail</span>
               <span style={{ color: "#555", fontSize: 11 }}>Notion</span>
               <span style={{ color: "#555", fontSize: 11 }}>GitHub</span>
-              {/* Drop zone */}
-              <div
-                onDragOver={e => e.preventDefault()}
-                onDrop={() => { setDragged(true); setTimeout(() => setStep(2), 600); }}
-                style={{ background: dragged ? T.accentBg : "rgba(45,206,152,0.06)", border: `1.5px dashed ${T.accent}`, borderRadius: 5, padding: "3px 10px", fontSize: 11, color: T.accent, fontWeight: 600, minWidth: 120, textAlign: "center", transition: "all 0.2s" }}>
-                {dragged ? "✓ Added!" : "← drop here"}
+              <div style={{ background: dragged ? T.accentBg : "rgba(45,206,152,0.06)", border: `1.5px dashed ${T.accent}`, borderRadius: 5, padding: "3px 10px", fontSize: 11, color: T.accent, fontWeight: 600, minWidth: 120, textAlign: "center" }}>
+                {dragged ? "🔖 Import to ReachFlow" : "(appears here)"}
               </div>
             </div>
             {/* Page content hint */}
@@ -2220,22 +2232,6 @@ function BookmarkletSetup({ onDismiss }) {
                 <div style={{ color: "#555", fontSize: 10, marginTop: 2 }}>VP Sales · Software · United States</div>
               </div>
             </div>
-          </div>
-
-          {/* The actual draggable bookmarklet */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: "0.875rem 1rem", marginBottom: "1rem" }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ color: T.text, fontSize: 13, fontWeight: 600, marginBottom: 3 }}>Drag this button to your bookmarks toolbar</div>
-              <div style={{ color: T.muted, fontSize: 12 }}>Then visit any LinkedIn search and click it</div>
-            </div>
-            <a
-              href={BOOKMARKLET_CODE}
-              draggable
-              onDragStart={e => e.dataTransfer.setData("text/plain", BOOKMARKLET_CODE)}
-              onClick={e => e.preventDefault()}
-              style={{ background: T.accent, color: "#0d1117", borderRadius: 8, padding: "9px 16px", fontSize: 13, fontWeight: 700, textDecoration: "none", cursor: "grab", display: "flex", alignItems: "center", gap: 6, userSelect: "none", flexShrink: 0 }}>
-              <span>🔖</span> Import to ReachFlow
-            </a>
           </div>
 
           <div style={{ display: "flex", gap: 8 }}>
