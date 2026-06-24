@@ -95,7 +95,7 @@ const STATUS_LABEL = { active: "Active", paused: "Paused", pending: "Pending", c
 function Badge({ status }) {
   const c = STATUS_COLOR[status] || T.muted;
   return (
-    <span style={{ background: c + "22", color: c, fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
+    <span style={{ background: c + "22", color: c, border: `1px solid ${c}40`, fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
       {STATUS_LABEL[status] || status}
     </span>
   );
