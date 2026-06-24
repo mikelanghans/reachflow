@@ -2302,7 +2302,7 @@ function Leads({ leads, setLeads, updateLeadsBulk, deleteLeadsBulk, logActivity,
   const [showBookmarklet, setShowBookmarklet] = useLocalStorage("rf_show_bookmarklet", true);
   const [selected, setSelected]     = useState(new Set());
 
-  const filtered = (filter === "all" ? leads : leads.filter(l => l.status === filter))
+  const filtered = (filter === "all" ? leads : filter === "needs_review" ? leads.filter(l => l.sequenceStatus === "needs_review") : leads.filter(l => l.status === filter))
     .filter(l => {
       if (scoreFilter === "all") return true;
       if (scoreFilter === "high")   return l.qualityScore != null && l.qualityScore >= 80;
@@ -2398,6 +2398,19 @@ function Leads({ leads, setLeads, updateLeadsBulk, deleteLeadsBulk, logActivity,
       setTimeout(() => setToast(null), 4000);
     }
   };
+  const bulkApprove = async () => {
+    const ids = [...selected];
+    clearSel();
+    if (updateLeadsBulk) {
+      try {
+        await updateLeadsBulk(ids, { sequenceStatus: "active" });
+        setToast(`✓ ${ids.length} lead${ids.length > 1 ? "s" : ""} approved and activated`);
+      } catch {
+        setToast("Couldn't approve — try again");
+      }
+      setTimeout(() => setToast(null), 4000);
+    }
+  };
   const bulkResetSequence = async () => {
     const ids = [...selected];
     if (!window.confirm(`Reset ${ids.length} lead${ids.length > 1 ? "s" : ""} back to step 1 of their flow? This restarts the sequence — it does not undo any real LinkedIn actions already taken.`)) return;
@@ -2484,6 +2497,9 @@ function Leads({ leads, setLeads, updateLeadsBulk, deleteLeadsBulk, logActivity,
               )}
             </div>
             <button onClick={bulkExport} style={{ background: T.card, color: T.muted, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 12 }}>↓ Export</button>
+            {filter === "needs_review" && (
+              <button onClick={bulkApprove} style={{ background: "rgba(45,206,152,0.12)", color: T.accent, border: `1px solid ${T.accent}66`, borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>✓ Approve & Activate</button>
+            )}
             <button onClick={bulkResetSequence} style={{ background: T.card, color: T.yellow, border: `1px solid ${T.yellow}44`, borderRadius: 7, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>↺ Reset sequence</button>
           </div>
           <button onClick={clearSel} style={{ background: "transparent", border: "none", color: T.muted, cursor: "pointer", fontSize: 13 }}>✕</button>
@@ -2506,6 +2522,14 @@ function Leads({ leads, setLeads, updateLeadsBulk, deleteLeadsBulk, logActivity,
             </button>
           );
         })}
+        {leads.some(l => l.sequenceStatus === "needs_review") && (
+          <button onClick={() => setFilter("needs_review")} style={{ background: filter === "needs_review" ? "rgba(210,153,34,0.18)" : "rgba(210,153,34,0.08)", color: T.yellow, border: `1px solid ${T.yellow}66`, borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: filter === "needs_review" ? 700 : 600, display: "flex", alignItems: "center", gap: 6 }}>
+            ⚠ Needs Review
+            <span style={{ background: T.yellow, color: "#1a1400", borderRadius: 10, padding: "1px 6px", fontSize: 10.5, fontWeight: 800 }}>
+              {leads.filter(l => l.sequenceStatus === "needs_review").length}
+            </span>
+          </button>
+        )}
         {!showBookmarklet && (
           <button onClick={() => setShowBookmarklet(true)} style={{ marginLeft: "auto", background: "transparent", color: T.muted, border: `1px solid ${T.border}`, borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 11 }}>🔖 Set up quick import</button>
         )}
@@ -2547,7 +2571,13 @@ function Leads({ leads, setLeads, updateLeadsBulk, deleteLeadsBulk, logActivity,
                     </div>
                   ) : <span style={{ color: T.faint, fontSize: 11 }}>—</span>}
                 </td>
-                <td style={td}><Badge status={lead.status} /></td>
+                <td style={td}>
+                  {lead.sequenceStatus === "needs_review" ? (
+                    <span title={lead.reviewReason || "Needs review before this lead can run"} style={{ background: "rgba(210,153,34,0.15)", color: T.yellow, fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 4, letterSpacing: "0.04em", whiteSpace: "nowrap", cursor: "help" }}>
+                      ⚠ Needs Review
+                    </span>
+                  ) : <Badge status={lead.status} />}
+                </td>
                 <td style={{ ...td, color: T.muted, fontSize: 12 }}>{lead.last}</td>
               </tr>
             ))}

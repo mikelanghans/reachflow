@@ -173,6 +173,7 @@ export function useSupabaseData(agencyId) {
           linkedin_urn: l.linkedin_urn,
           linkedin_url: l.linkedin_url,
           sequenceStatus: l.sequence_status,
+          reviewReason: l.review_reason,
           currentStep: l.current_step,
           ghlContactId: l.ghl_contact_id,
           email: l.email,
