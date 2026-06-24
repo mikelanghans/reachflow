@@ -80,6 +80,7 @@ export function useSupabaseData(agencyId) {
           tagline: agencyData.brand_tagline || "Agency Console",
           color: agencyData.brand_color || "#2dce98",
           logoUrl: agencyData.brand_logo_url || "",
+          theme: agencyData.brand_theme || "dark",
         });
         setVoiceProfileState(
           agencyData.voice_profile || {
@@ -590,6 +591,7 @@ export function useSupabaseData(agencyId) {
           brand_color: newBrand.color,
           brand_logo_url: newBrand.logoUrl,
           brand_tagline: newBrand.tagline,
+          brand_theme: newBrand.theme,
         })
         .eq("id", agencyId);
       if (error) {

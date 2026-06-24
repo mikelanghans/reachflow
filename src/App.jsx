@@ -12,9 +12,18 @@ const T = {
   blue: "#58a6ff", green: "#3fb950", yellow: "#d29922", red: "#f85149", purple: "#bc8cff",
 };
 
+const DARK_PALETTE = {
+  bg: "#0d1117", surface: "#161b22", card: "#1c2128", border: "#30363d",
+  text: "#e6edf3", muted: "#7d8590", faint: "#3d444d",
+};
+const LIGHT_PALETTE = {
+  bg: "#f6f8fa", surface: "#ffffff", card: "#f1f3f5", border: "#d8dee4",
+  text: "#1f2328", muted: "#59636e", faint: "#d0d7de",
+};
+
 const DEFAULT_BRAND = {
   name: "ReachFlow", tagline: "Agency Console",
-  color: "#2dce98", logoUrl: "", darkBg: "#0d1117",
+  color: "#2dce98", logoUrl: "", darkBg: "#0d1117", theme: "dark",
 };
 
 const DEFAULT_VOICE_PROFILE = {
@@ -4268,6 +4277,18 @@ function Settings({ brand = DEFAULT_BRAND, onBrandChange, voiceProfile = DEFAULT
           </div>
         </div>
 
+        <div style={{ marginBottom: "1.25rem" }}>
+          <label style={label}>Theme</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            {[["dark", "🌙 Dark"], ["light", "☀ Light"]].map(([id, lbl]) => (
+              <button key={id} onClick={() => setBrand({ theme: id })}
+                style={{ flex: 1, background: brandDraft.theme === id ? brandDraft.color + "1a" : T.card, color: brandDraft.theme === id ? brandDraft.color : T.muted, border: `1.5px solid ${brandDraft.theme === id ? brandDraft.color : T.border}`, borderRadius: 8, padding: "9px", cursor: "pointer", fontSize: 13, fontWeight: brandDraft.theme === id ? 700 : 500 }}>
+                {lbl}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Live preview */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "1rem", marginBottom: "1rem" }}>
           <div style={{ color: T.muted, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Live preview</div>
@@ -6435,6 +6456,10 @@ export default function App() {
   T.accentBg  = brand.color + "22";
   T.accentDim = brand.color + "11";
 
+  const palette = brand.theme === "light" ? LIGHT_PALETTE : DARK_PALETTE;
+  T.bg = palette.bg; T.surface = palette.surface; T.card = palette.card;
+  T.border = palette.border; T.text = palette.text; T.muted = palette.muted; T.faint = palette.faint;
+
   const saveFlow = (campaignId, flow) => { setFlows(f => ({ ...f, [campaignId]: flow })); dbSaveFlow(campaignId, flow); };
   const toggleReviewModeWrapped = id => toggleReviewMode(id);
 
@@ -6446,8 +6471,8 @@ export default function App() {
 
   // Loading
   if (session === undefined) return (
-    <div style={{ minHeight: "100vh", background: "#0d1117", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ color: "#2dce98", fontSize: 13 }}>Loading…</div>
+    <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ color: T.accent, fontSize: 13 }}>Loading…</div>
     </div>
   );
   // Not logged in
